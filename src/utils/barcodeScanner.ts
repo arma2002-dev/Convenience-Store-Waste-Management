@@ -123,7 +123,48 @@ export async function lookupBarcodeFromPublicAPI(barcode: string): Promise<{
     console.warn('Failed to query barcode from public API:', err);
   }
 
-  // 3. Fallback: If network is offline or server fails, generate Korean standard product name
+  // 3. Fallback: If network is offline or unlisted, guess from Korean manufacturer prefix
+  if (clean.startsWith('880103700')) {
+    return {
+      productName: '맥심 슈프림골드 커피믹스',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '동서식품',
+    };
+  }
+  if (clean.startsWith('880103705')) {
+    return {
+      productName: '맥심 화이트골드 커피믹스',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '동서식품',
+    };
+  }
+  if (clean.startsWith('880103702') || clean.startsWith('880103707')) {
+    return {
+      productName: '맥심 모카골드 마일드 커피믹스',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '동서식품',
+    };
+  }
+  if (clean.startsWith('880103708')) {
+    return {
+      productName: '동아오츠카 포카리스웨트/음료',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '동아오츠카',
+    };
+  }
+  if (clean.startsWith('8801037') || clean.startsWith('8801104')) {
+    return {
+      productName: '동서식품 맥심 커피/음료',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '동서식품',
+    };
+  }
+
   return {
     productName: `한국 유통상품 (${clean})`,
     category: '기타',

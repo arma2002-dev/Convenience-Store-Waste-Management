@@ -119,6 +119,11 @@ const KOREA_POPULAR_BARCODES: Record<string, { productName: string; category: st
   '8801056021018': { productName: '롯데 레쓰비 마일드 175ml 캔', category: '유제품/음료', manufacturer: '롯데칠성음료' },
   '8801056021025': { productName: '롯데 칸타타 프리미엄 라떼 275ml', category: '유제품/음료', manufacturer: '롯데칠성음료' },
   '8801104111019': { productName: '동서 맥심 TOP 마스터라떼 275ml', category: '유제품/음료', manufacturer: '동서식품' },
+  '8801037002928': { productName: '맥심 슈프림골드 커피믹스', category: '유제품/음료', manufacturer: '동서식품' },
+  '8801037050738': { productName: '맥심 화이트골드 커피믹스 100T', category: '유제품/음료', manufacturer: '동서식품' },
+  '8801037056204': { productName: '맥심 화이트골드 커피믹스 210T', category: '유제품/음료', manufacturer: '동서식품' },
+  '8801037028720': { productName: '맥심 모카골드 마일드 500g', category: '유제품/음료', manufacturer: '동서식품' },
+  '8801037071160': { productName: '맥심 모카골드 마일드 커피믹스', category: '유제품/음료', manufacturer: '동서식품' },
   '8801094017309': { productName: '몬스터 에너지 355ml 캔', category: '유제품/음료', manufacturer: '코카콜라음료' },
   '8801056028109': { productName: '롯데 핫식스 오리지널 250ml 캔', category: '유제품/음료', manufacturer: '롯데칠성음료' },
   // 디저트/베이커리
@@ -333,11 +338,20 @@ function guessKoreanProductFromBarcode(barcode: string): { productName: string; 
   if (clean.startsWith('8801121')) {
     return { productName: '매일유업 유음료/디저트', category: '유제품/음료', manufacturer: '매일유업' };
   }
-  if (clean.startsWith('8801104')) {
-    return { productName: '동서식품 커피/음료', category: '유제품/음료', manufacturer: '동서식품' };
+  if (clean.startsWith('880103700')) {
+    return { productName: '맥심 슈프림골드 커피믹스', category: '유제품/음료', manufacturer: '동서식품' };
   }
-  if (clean.startsWith('8801037')) {
-    return { productName: '동아오츠카 음료', category: '유제품/음료', manufacturer: '동아오츠카' };
+  if (clean.startsWith('880103705')) {
+    return { productName: '맥심 화이트골드 커피믹스', category: '유제품/음료', manufacturer: '동서식품' };
+  }
+  if (clean.startsWith('880103702') || clean.startsWith('880103707')) {
+    return { productName: '맥심 모카골드 마일드 커피믹스', category: '유제품/음료', manufacturer: '동서식품' };
+  }
+  if (clean.startsWith('880103708')) {
+    return { productName: '동아오츠카 포카리스웨트/음료', category: '유제품/음료', manufacturer: '동아오츠카' };
+  }
+  if (clean.startsWith('8801037') || clean.startsWith('8801104')) {
+    return { productName: '동서식품 맥심 커피/음료', category: '유제품/음료', manufacturer: '동서식품' };
   }
   if (clean.startsWith('8806002')) {
     return { productName: '동아제약 자양강장/의약외품', category: '유제품/음료', manufacturer: '동아제약' };
