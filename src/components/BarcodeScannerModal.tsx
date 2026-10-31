@@ -65,6 +65,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
   const controlsRef = useRef<any>(null);
+  const hasDetectedRef = useRef<boolean>(false);
 
   // Sync date when modal opens with initialDate
   useEffect(() => {
@@ -72,6 +73,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       if (initialDate) setDisposalDate(initialDate);
       setScanSuccessMessage(null);
       setCameraError(null);
+      hasDetectedRef.current = false;
     } else {
       stopCamera();
     }
@@ -90,6 +92,17 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const fetchBarcodePublicInfo = async (code: string) => {
     const clean = code.trim();
     if (!clean || clean.length < 5) return;
+
+    // Instant local preset catalog match
+    const localMatch = findPresetProductByBarcode(clean);
+    if (localMatch) {
+      setProductName(localMatch.productName);
+      if (localMatch.category) setCategory(localMatch.category);
+      setScanSuccessMessage(`[공공 유통 카탈로그] "${localMatch.productName}" 자동 매칭 완료`);
+      playSuccessChime();
+      return;
+    }
+
     setIsLookingUpBarcode(true);
     setScanSuccessMessage('공공데이터포털 유통바코드 조회 중...');
     try {
@@ -100,14 +113,17 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           setCategory(info.category);
         }
         setScanSuccessMessage(
-          `[${info.sourceName || '공공데이터포털'}] ${info.productName} 자동 조회 완료`
+          `[${info.sourceName || '공공데이터포털'}] "${info.productName}" 자동 조회 완료`
         );
         playSuccessChime();
       } else {
-        setScanSuccessMessage(`바코드 [${clean}] 인식됨 (직접 상품명 확인 가능)`);
+        const fallbackName = `한국 유통상품 (${clean})`;
+        setProductName(fallbackName);
+        setScanSuccessMessage(`바코드 [${clean}] 인식 완료 - 상품명 자동 입력됨`);
       }
     } catch (e) {
       console.warn('Barcode lookup failed:', e);
+      setProductName(`한국 유통상품 (${clean})`);
     } finally {
       setIsLookingUpBarcode(false);
     }
@@ -119,8 +135,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     const matched = findPresetProductByBarcode(val);
     if (matched) {
       setProductName(matched.productName);
-      setCategory(matched.category);
-      setScanSuccessMessage(`유통 바코드 자동 매칭: ${matched.productName}`);
+      if (matched.category) setCategory(matched.category);
+      setScanSuccessMessage(`유통 바코드 자동 매칭: "${matched.productName}"`);
     } else if (val.trim().length >= 8) {
       // Auto-query when user finishes entering barcode digits
       fetchBarcodePublicInfo(val);
@@ -165,14 +181,16 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       );
       const selectedDeviceId = backCam?.deviceId || videoInputDevices[0]?.deviceId;
 
+      hasDetectedRef.current = false;
       const controls = await codeReader.decodeFromVideoDevice(
         selectedDeviceId,
         videoRef.current!,
         (result, err) => {
-          if (result) {
-            const detectedCode = result.getText();
-            handleDetectedBarcode(detectedCode, '실시간 카메라 바코드 스캔 완료!');
+          if (result && !hasDetectedRef.current) {
+            hasDetectedRef.current = true;
+            const detectedCode = result.getText().trim();
             stopCamera();
+            handleDetectedBarcode(detectedCode, '실시간 카메라 바코드 스캔 완료!');
           }
         }
       );
@@ -227,10 +245,43 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   // Process a detected barcode string
   const handleDetectedBarcode = async (code: string, successMsg: string) => {
-    setBarcode(code);
+    const clean = code.trim();
+    setBarcode(clean);
     playSuccessChime();
-    setScanSuccessMessage(`${successMsg} (바코드: ${code}) - 공공데이터 조회 중...`);
-    await fetchBarcodePublicInfo(code);
+
+    // 1. Instant check in preset catalog for zero-latency response
+    const localMatch = findPresetProductByBarcode(clean);
+    if (localMatch) {
+      setProductName(localMatch.productName);
+      if (localMatch.category) setCategory(localMatch.category);
+      setScanSuccessMessage(`${successMsg} - [공공 유통 카탈로그] "${localMatch.productName}" 자동 기입 완료!`);
+      return;
+    }
+
+    // 2. Fetch from public API / server AI
+    setScanSuccessMessage(`${successMsg} (바코드: ${clean}) - 공공데이터포털 상품명 조회 중...`);
+    setIsLookingUpBarcode(true);
+    try {
+      const info = await lookupBarcodeFromPublicAPI(clean);
+      if (info && info.productName) {
+        setProductName(info.productName);
+        if (info.category) setCategory(info.category);
+        setScanSuccessMessage(
+          `[${info.sourceName || '공공데이터포털'}] "${info.productName}" 자동 기입 완료!`
+        );
+        playSuccessChime();
+      } else {
+        const fallbackName = `한국 유통상품 (${clean})`;
+        setProductName(fallbackName);
+        setScanSuccessMessage(`바코드 [${clean}] 인식 완료 - 상품명 자동 입력됨`);
+      }
+    } catch (e) {
+      console.warn('Barcode lookup failed:', e);
+      setProductName(`한국 유통상품 (${clean})`);
+      setScanSuccessMessage(`바코드 [${clean}] 인식 완료`);
+    } finally {
+      setIsLookingUpBarcode(false);
+    }
   };
 
   // Play subtle feedback chime
@@ -575,13 +626,16 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                         }
                       }}
                       placeholder="바코드 13자리 입력"
-                      className="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      className="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
                     />
                     {barcode && (
                       <button
                         type="button"
-                        onClick={() => handleBarcodeChange('')}
-                        className="absolute right-2 top-2.5 text-slate-400 hover:text-slate-600"
+                        onClick={() => {
+                          setBarcode('');
+                          setProductName('');
+                        }}
+                        className="absolute right-2 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
                         title="지우기"
                       >
                         <X className="w-4 h-4" />
@@ -606,40 +660,29 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  상품명 <span className="text-rose-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    상품명 <span className="text-rose-500">*</span>
+                  </label>
+                  {productName && (
+                    <span className="text-[10px] text-teal-700 font-medium bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
+                      자동 기입됨
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
                   value={productName}
                   onChange={(e) => setProductName(e.target.value)}
-                  placeholder="예: 참치마요 삼각김밥"
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  placeholder="바코드 스캔 시 자동 입력 (직접 입력 가능)"
+                  className="w-full px-3 py-2 text-sm font-medium border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
                 />
               </div>
             </div>
 
-            {/* Category and Quantity */}
+            {/* Quantity and Date only (Category and Reason removed) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">카테고리</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as WasteCategory)}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                >
-                  <option value="삼각김밥/주먹밥">삼각김밥 / 주먹밥</option>
-                  <option value="도시락/덮밥">도시락 / 덮밥</option>
-                  <option value="샌드위치/햄버거">샌드위치 / 햄버거</option>
-                  <option value="김밥/롤">김밥 / 롤</option>
-                  <option value="유제품/음료">유제품 / 음료</option>
-                  <option value="디저트/베이커리">디저트 / 베이커리</option>
-                  <option value="조리/튀김">조리 / 튀김</option>
-                  <option value="기타">기타</option>
-                </select>
-              </div>
-
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   폐기 수량 <span className="text-rose-500">*</span>
@@ -648,7 +691,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+                    className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
@@ -658,45 +701,30 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     required
                     value={quantity}
                     onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-20 px-3 py-2 text-center text-sm font-semibold tabular-nums border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-24 px-3 py-2 text-center text-sm font-semibold tabular-nums border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                   <button
                     type="button"
                     onClick={() => setQuantity(quantity + 1)}
-                    className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+                    className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
                   <span className="text-xs text-slate-500 ml-1">개</span>
                 </div>
               </div>
-            </div>
 
-            {/* Date and Reason only */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">폐기 날짜 <span className="text-rose-500">*</span></label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  폐기 날짜 <span className="text-rose-500">*</span>
+                </label>
                 <input
                   type="date"
                   required
                   value={disposalDate}
                   onChange={(e) => setDisposalDate(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
                 />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">폐기 사유</label>
-                <select
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value as DisposalReason)}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  <option value="유통기한 경과">유통기한 경과</option>
-                  <option value="포장 훼손">포장 훼손</option>
-                  <option value="신선도 저하">신선도 저하</option>
-                  <option value="기타 사유">기타 사유</option>
-                </select>
               </div>
             </div>
           </form>

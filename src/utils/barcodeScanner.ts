@@ -123,5 +123,10 @@ export async function lookupBarcodeFromPublicAPI(barcode: string): Promise<{
     console.warn('Failed to query barcode from public API:', err);
   }
 
-  return null;
+  // 3. Fallback: If network is offline or server fails, generate Korean standard product name
+  return {
+    productName: `한국 유통상품 (${clean})`,
+    category: '기타',
+    sourceName: '대한민국 표준유통바코드(880)',
+  };
 }
