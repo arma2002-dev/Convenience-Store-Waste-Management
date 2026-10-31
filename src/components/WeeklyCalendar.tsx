@@ -3,15 +3,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Clock,
   Trash2,
-  Calendar,
-  AlertTriangle,
   Package,
+  Barcode,
 } from 'lucide-react';
 import { WasteItem } from '../types/waste';
 import { CATEGORY_COLORS } from '../data/presetProducts';
-import { formatKRW } from '../utils/storage';
 
 interface WeeklyCalendarProps {
   currentDate: Date;
@@ -32,7 +29,6 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   onAddOnDateAndTime,
   onDeleteItem,
 }) => {
-  // Find Sunday of the current week (or Monday if preferred, in Korea Sun-Sat or Mon-Sun)
   // Let's use Sunday as starting day of the week
   const startOfWeek = new Date(currentDate);
   const day = startOfWeek.getDay();
@@ -64,24 +60,17 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   );
 
   const totalWeekQty = weekItems.reduce((acc, c) => acc + c.quantity, 0);
-  const totalWeekLoss = weekItems.reduce(
-    (acc, c) => acc + c.unitPrice * c.quantity,
-    0
-  );
-  const avgDailyLoss = Math.round(totalWeekLoss / 7);
 
-  // Identify highest waste day of the week
+  // Identify highest waste day of the week by quantity
   const dayTotals: Record<string, number> = {};
   weekItems.forEach((item) => {
-    dayTotals[item.date] = (dayTotals[item.date] || 0) + item.unitPrice * item.quantity;
+    dayTotals[item.date] = (dayTotals[item.date] || 0) + item.quantity;
   });
   const worstDayEntry = Object.entries(dayTotals).sort((a, b) => b[1] - a[1])[0];
-  const worstDayStr = worstDayEntry
-    ? weekDays.find((w) => w.dateStr === worstDayEntry[0])?.dayName + '요일'
-    : '없음';
-
-  // Standard CVS Time slots
-  const TIME_SLOTS = ['02:00', '14:00', '20:00', '22:00', '수시/기타'];
+  const worstDayStr =
+    worstDayEntry && worstDayEntry[1] > 0
+      ? weekDays.find((w) => w.dateStr === worstDayEntry[0])?.dayName + '요일'
+      : '없음';
 
   return (
     <div className="space-y-4">
@@ -154,10 +143,6 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
         {weekDays.map((w, idx) => {
           const dayItems = wasteItems.filter((i) => i.date === w.dateStr);
           const dayQty = dayItems.reduce((acc, c) => acc + c.quantity, 0);
-          const dayRetailLoss = dayItems.reduce(
-            (acc, c) => acc + c.unitPrice * c.quantity,
-            0
-          );
           const isToday = w.dateStr === todayStr;
 
           return (
@@ -224,18 +209,13 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                         key={item.id}
                         className={`p-2.5 rounded-xl border text-xs relative group/item bg-white hover:shadow-xs transition-all ${catColor.border}`}
                       >
+                        {/* Top row: Product Name & Delete */}
                         <div className="flex items-start justify-between gap-1">
-                          <div className="min-w-0 flex-1">
-                            <div className="font-semibold text-slate-800 leading-tight truncate">
-                              {item.productName}
-                            </div>
-                            <div className="text-[10px] text-slate-500 mt-0.5 truncate flex items-center gap-1">
-                              <span
-                                className="w-1.5 h-1.5 rounded-full inline-block"
-                                style={{ backgroundColor: catColor.dot }}
-                              />
-                              {item.category}
-                            </div>
+                          <div
+                            className="font-semibold text-slate-800 leading-tight text-xs flex-1"
+                            title={item.productName}
+                          >
+                            {item.productName}
                           </div>
 
                           <button
@@ -246,11 +226,22 @@ export const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                                 onDeleteItem(item.id);
                               }
                             }}
-                            className="opacity-0 group-hover/item:opacity-100 p-1 text-slate-400 hover:text-rose-600 rounded transition-opacity"
+                            className="opacity-0 group-hover/item:opacity-100 p-0.5 text-slate-400 hover:text-rose-600 rounded transition-opacity shrink-0"
                             title="삭제"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
+                        </div>
+
+                        {/* Barcode Number: dedicated row, completely visible without any truncate */}
+                        <div
+                          className="mt-1.5 flex items-center gap-1 font-mono text-[10.5px] sm:text-[11px] bg-slate-50 px-1.5 py-1 rounded border border-slate-200/90 text-slate-700 w-full"
+                          title={`바코드: ${item.barcode || '바코드 없음'}`}
+                        >
+                          <Barcode className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="font-semibold tracking-tighter sm:tracking-normal tabular-nums break-all select-all leading-tight">
+                            {item.barcode || '바코드 없음'}
+                          </span>
                         </div>
 
                         <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100 text-[11px]">

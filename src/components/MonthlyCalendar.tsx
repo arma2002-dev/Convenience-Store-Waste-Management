@@ -199,7 +199,6 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
           {calendarCells.map((cell) => {
             const dayItems = itemsByDate[cell.dateStr] || [];
             const dayQuantity = dayItems.reduce((acc, c) => acc + c.quantity, 0);
-            const dayRetailLoss = dayItems.reduce((acc, c) => acc + c.unitPrice * c.quantity, 0);
             const isToday = cell.dateStr === todayStr;
 
             return (
