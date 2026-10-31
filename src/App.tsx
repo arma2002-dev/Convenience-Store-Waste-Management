@@ -1,17 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import {
-  Plus,
-  Scan,
-  Download,
-  Filter,
-  Search,
-  Store,
-  Layers,
-  Sparkles,
-  Info,
-} from 'lucide-react';
-import { WasteItem, WasteCategory } from './types/waste';
+import { Scan, Download, Search } from 'lucide-react';
+import { WasteItem } from './types/waste';
 import {
   loadWasteItems,
   saveWasteItems,
@@ -33,9 +23,8 @@ export default function App() {
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
-  // Search & Filter
+  // Search (Product Name or Barcode)
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('전체');
 
   // Modals state
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -153,34 +142,20 @@ export default function App() {
     setIsEditingStore(false);
   };
 
-  // Filter items based on search and category
+  // Filter items based purely on product name or barcode search
   const filteredItems = wasteItems.filter((item) => {
-    const matchesSearch =
-      searchQuery === '' ||
-      item.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.barcode.includes(searchQuery);
-
-    const matchesCategory =
-      selectedCategoryFilter === '전체' || item.category === selectedCategoryFilter;
-
-    return matchesSearch && matchesCategory;
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.trim().toLowerCase();
+    return (
+      item.productName.toLowerCase().includes(query) ||
+      item.barcode.toLowerCase().includes(query)
+    );
   });
 
   // Selected month string for report e.g. "2026-10"
   const selectedMonthStr = `${currentDate.getFullYear()}-${String(
     currentDate.getMonth() + 1
   ).padStart(2, '0')}`;
-
-  const CATEGORIES = [
-    '전체',
-    '삼각김밥/주먹밥',
-    '도시락/덮밥',
-    '샌드위치/햄버거',
-    '김밥/롤',
-    '유제품/음료',
-    '디저트/베이커리',
-    '조리/튀김',
-  ];
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 font-sans">
@@ -280,37 +255,39 @@ export default function App() {
           </div>
         </div>
 
-        {/* Filter Bar (Search & Category filter) */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-          {/* Category Tabs */}
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategoryFilter(cat)}
-                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-                  selectedCategoryFilter === cat
-                    ? 'bg-slate-900 text-white'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          {/* Search Input */}
-          <div className="relative sm:w-64 shrink-0">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+        {/* Search Bar (품목명 또는 바코드 검색) */}
+        <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="relative flex items-center">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="품목명 또는 바코드 검색..."
-              className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 bg-slate-50 focus:bg-white"
+              className="w-full pl-10 pr-20 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 bg-slate-50 focus:bg-white transition-all text-slate-900 placeholder:text-slate-400"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 px-2 py-1 text-xs text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded font-medium transition-colors"
+              >
+                초기화
+              </button>
+            )}
           </div>
+          {searchQuery.trim() && (
+            <div className="mt-2 text-xs text-purple-700 font-medium px-1 flex items-center justify-between">
+              <span>'{searchQuery}' 검색 결과: 총 {filteredItems.length}건</span>
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="text-slate-400 hover:text-slate-600 underline"
+              >
+                검색 취소
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Calendar View Container */}
