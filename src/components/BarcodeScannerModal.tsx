@@ -63,8 +63,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
-  const controlsRef = useRef<any>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<any>(null);
   const hasDetectedRef = useRef<boolean>(false);
 
   // Sync date when modal opens with initialDate
@@ -90,10 +90,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   // Query product data from Public Data Portal (data.go.kr) & Open API
   const fetchBarcodePublicInfo = async (code: string) => {
-    const clean = code.trim();
+    const clean = code.replace(/[\s-]/g, '');
     if (!clean || clean.length < 5) return;
 
-    // Instant local preset catalog match
+    // 1. Instant local preset catalog match (zero latency)
     const localMatch = findPresetProductByBarcode(clean);
     if (localMatch) {
       setProductName(localMatch.productName);
@@ -104,7 +104,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
 
     setIsLookingUpBarcode(true);
-    setScanSuccessMessage('공공데이터포털 유통바코드 조회 중...');
+    setScanSuccessMessage('공공데이터 유통 바코드 조회 중...');
     try {
       const info = await lookupBarcodeFromPublicAPI(clean);
       if (info && info.productName) {
@@ -119,7 +119,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       } else {
         const fallbackName = `한국 유통상품 (${clean})`;
         setProductName(fallbackName);
-        setScanSuccessMessage(`바코드 [${clean}] 인식 완료 - 상품명 자동 입력됨`);
+        setScanSuccessMessage(`바코드 [${clean}] 조회 완료 - 상품명을 확인해 주세요`);
       }
     } catch (e) {
       console.warn('Barcode lookup failed:', e);
@@ -132,22 +132,22 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   // Quick lookup when barcode changes
   const handleBarcodeChange = (val: string) => {
     setBarcode(val);
-    const matched = findPresetProductByBarcode(val);
+    const clean = val.replace(/[\s-]/g, '');
+    const matched = findPresetProductByBarcode(clean);
     if (matched) {
       setProductName(matched.productName);
       if (matched.category) setCategory(matched.category);
       setScanSuccessMessage(`유통 바코드 자동 매칭: "${matched.productName}"`);
-    } else if (val.trim().length >= 8) {
-      // Auto-query when user finishes entering barcode digits
-      fetchBarcodePublicInfo(val);
+    } else if (clean.length >= 8) {
+      fetchBarcodePublicInfo(clean);
     }
   };
 
   // Start Live Camera Barcode Scanning
   const startCamera = async () => {
     setCameraError(null);
+    hasDetectedRef.current = false;
 
-    // 1. Check if mediaDevices API is supported
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setCameraError(
         '현재 브라우저 환경에서는 실시간 카메라 접근이 지원되지 않습니다. "사진 파일 업로드" 기능을 이용해 주세요.'
@@ -157,44 +157,41 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
 
     try {
-      // 2. Query available video input devices
-      const videoInputDevices = await BrowserMultiFormatReader.listVideoInputDevices().catch(
-        () => []
-      );
-
-      if (!videoInputDevices || videoInputDevices.length === 0) {
-        setCameraError(
-          '연결된 카메라(웹캠) 장치를 찾을 수 없습니다. 카메라가 있는 스마트폰/노트북을 사용하시거나 "사진 파일 업로드"로 바코드 사진을 올려주세요.'
-        );
-        setIsCameraActive(false);
-        return;
-      }
-
       setIsCameraActive(true);
 
-      const codeReader = new BrowserMultiFormatReader();
-      codeReaderRef.current = codeReader;
+      // Query available video devices and prefer rear/environment camera
+      const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+      const videoDevices = devices.filter((d) => d.kind === 'videoinput');
 
-      // Prefer back/rear camera if available on mobile
-      const backCam = videoInputDevices.find((d) =>
+      const backCam = videoDevices.find((d) =>
         /back|rear|environment|후면|배면/i.test(d.label)
       );
-      const selectedDeviceId = backCam?.deviceId || videoInputDevices[0]?.deviceId;
+      const selectedDeviceId = backCam?.deviceId || videoDevices[0]?.deviceId;
 
-      hasDetectedRef.current = false;
-      const controls = await codeReader.decodeFromVideoDevice(
-        selectedDeviceId,
-        videoRef.current!,
-        (result, err) => {
-          if (result && !hasDetectedRef.current) {
-            hasDetectedRef.current = true;
-            const detectedCode = result.getText().trim();
-            stopCamera();
-            handleDetectedBarcode(detectedCode, '실시간 카메라 바코드 스캔 완료!');
-          }
-        }
-      );
-      controlsRef.current = controls;
+      const constraints: MediaStreamConstraints = {
+        video: selectedDeviceId
+          ? {
+              deviceId: { exact: selectedDeviceId },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            }
+          : {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+        audio: false,
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+
+      startScanLoop();
     } catch (err: any) {
       console.warn('Camera access error caught:', err);
       const errStr = (err?.message || err?.name || '').toLowerCase();
@@ -225,19 +222,77 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
   };
 
+  // Continuous barcode detection loop using native BarcodeDetector with ZXing fallback
+  const startScanLoop = () => {
+    if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+
+    const hasNativeDetector = 'BarcodeDetector' in window;
+    let nativeDetector: any = null;
+    if (hasNativeDetector) {
+      try {
+        nativeDetector = new (window as any).BarcodeDetector({
+          formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e'],
+        });
+      } catch (e) {
+        nativeDetector = null;
+      }
+    }
+
+    const codeReader = new BrowserMultiFormatReader();
+
+    const scanFrame = async () => {
+      if (hasDetectedRef.current || !videoRef.current) return;
+      if (videoRef.current.readyState < 2) return;
+
+      // 1. Native BarcodeDetector (instant, GPU accelerated)
+      if (nativeDetector) {
+        try {
+          const barcodes = await nativeDetector.detect(videoRef.current);
+          if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+            const raw = barcodes[0].rawValue.trim();
+            if (raw && !hasDetectedRef.current) {
+              hasDetectedRef.current = true;
+              stopCamera();
+              handleDetectedBarcode(raw, '실시간 카메라 바코드 스캔 완료!');
+              return;
+            }
+          }
+        } catch (e) {
+          // Fall through to ZXing
+        }
+      }
+
+      // 2. ZXing fallback
+      try {
+        const result = await codeReader.decodeOnceFromVideoElement(videoRef.current);
+        if (result && result.getText() && !hasDetectedRef.current) {
+          const raw = result.getText().trim();
+          if (raw) {
+            hasDetectedRef.current = true;
+            stopCamera();
+            handleDetectedBarcode(raw, '실시간 카메라 바코드 스캔 완료!');
+            return;
+          }
+        }
+      } catch (e) {
+        // Barcode not in frame or blurry
+      }
+    };
+
+    scanIntervalRef.current = setInterval(scanFrame, 200);
+  };
+
   // Stop camera stream
   const stopCamera = () => {
-    if (controlsRef.current) {
-      try {
-        controlsRef.current.stop();
-      } catch (e) {
-        console.debug(e);
-      }
-      controlsRef.current = null;
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
     }
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach((track) => track.stop());
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
     setIsCameraActive(false);
@@ -245,9 +300,15 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   // Process a detected barcode string
   const handleDetectedBarcode = async (code: string, successMsg: string) => {
-    const clean = code.trim();
+    const clean = code.replace(/[\s-]/g, '');
     setBarcode(clean);
     playSuccessChime();
+
+    if (navigator.vibrate) {
+      try {
+        navigator.vibrate([40, 30, 40]);
+      } catch (e) {}
+    }
 
     // 1. Instant check in preset catalog for zero-latency response
     const localMatch = findPresetProductByBarcode(clean);
@@ -273,7 +334,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       } else {
         const fallbackName = `한국 유통상품 (${clean})`;
         setProductName(fallbackName);
-        setScanSuccessMessage(`바코드 [${clean}] 인식 완료 - 상품명 자동 입력됨`);
+        setScanSuccessMessage(`바코드 [${clean}] 인식 완료 - 상품명을 확인해 주세요`);
       }
     } catch (e) {
       console.warn('Barcode lookup failed:', e);
@@ -498,22 +559,30 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 />
               </div>
 
-              {/* Live Video Scanner Viewport */}
-              {isCameraActive && (
-                <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border-2 border-teal-500 shadow-inner flex items-center justify-center">
-                  <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline />
-                  {/* Target frame */}
-                  <div className="absolute inset-x-12 inset-y-10 border-2 border-dashed border-teal-400 rounded-lg pointer-events-none flex flex-col items-center justify-between p-2">
-                    <span className="text-[11px] font-mono text-teal-200 bg-black/60 px-2 py-0.5 rounded">
-                      바코드를 이 사각 영역 안에 맞춰주세요
-                    </span>
-                    <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-teal-400 to-transparent animate-pulse" />
-                    <span className="text-[10px] text-teal-300 bg-black/60 px-2 py-0.5 rounded">
-                      자동 인식 대기 중
-                    </span>
-                  </div>
+              {/* Live Video Scanner Viewport (Always kept in DOM so videoRef is ready) */}
+              <div
+                className={`relative w-full aspect-video bg-black rounded-xl overflow-hidden border-2 border-purple-500 shadow-inner flex items-center justify-center transition-all ${
+                  isCameraActive ? 'block' : 'hidden'
+                }`}
+              >
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  playsInline
+                  muted
+                />
+                {/* Target frame */}
+                <div className="absolute inset-x-8 sm:inset-x-14 inset-y-8 sm:inset-y-10 border-2 border-dashed border-purple-400 rounded-lg pointer-events-none flex flex-col items-center justify-between p-2.5 bg-purple-500/5">
+                  <span className="text-[11px] font-mono text-purple-200 bg-black/75 px-3 py-1 rounded-full shadow-xs">
+                    바코드를 이 사각 영역 중앙에 맞춰주세요
+                  </span>
+                  <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-purple-400 to-transparent animate-pulse shadow-sm shadow-purple-400" />
+                  <span className="text-[10px] text-purple-300 bg-black/75 px-2.5 py-0.5 rounded-full">
+                    실시간 자동 감지 중...
+                  </span>
                 </div>
-              )}
+              </div>
 
               {/* Photo preview if uploaded */}
               {scannedPhotoPreview && !isCameraActive && (
@@ -665,7 +734,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     상품명 <span className="text-rose-500">*</span>
                   </label>
                   {productName && (
-                    <span className="text-[10px] text-teal-700 font-medium bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
+                    <span className="text-[10px] text-purple-700 font-medium bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
                       자동 기입됨
                     </span>
                   )}
@@ -675,9 +744,28 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   required
                   value={productName}
                   onChange={(e) => setProductName(e.target.value)}
-                  placeholder="바코드 스캔 시 자동 입력 (직접 입력 가능)"
+                  placeholder="바코드 스캔 시 자동 입력 (직접 수정/입력 가능)"
                   className="w-full px-3 py-2 text-sm font-medium border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
                 />
+                {/* Popular CU items quick chips for instant tap */}
+                <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                  <span className="text-[10px] text-slate-400 shrink-0 font-medium">인기상품:</span>
+                  {PRESET_PRODUCTS.slice(0, 7).map((p) => (
+                    <button
+                      key={p.barcode}
+                      type="button"
+                      onClick={() => {
+                        setBarcode(p.barcode);
+                        setProductName(p.productName);
+                        if (p.category) setCategory(p.category);
+                        setScanSuccessMessage(`선택 완료: ${p.productName}`);
+                      }}
+                      className="px-2 py-0.5 text-[11px] bg-slate-100 hover:bg-purple-100 hover:text-purple-800 text-slate-700 rounded transition-colors whitespace-nowrap shrink-0 border border-slate-200 cursor-pointer"
+                    >
+                      {p.productName}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
