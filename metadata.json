@@ -1,0 +1,6 @@
+{
+  "name": "포스웨이스트 - 편의점 폐기 관리 시스템",
+  "description": "편의점 월별·주별 폐기 캘린더, 바코드 사진 스캔 및 자동 등록, 품목·수량·폐기손실액 통계 관리 프로그램",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
