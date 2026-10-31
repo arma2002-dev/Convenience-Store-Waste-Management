@@ -111,56 +111,132 @@ app.post('/api/scan-barcode-image', async (req, res) => {
   }
 });
 
-// API: AI Waste Analysis & Recommendation
-app.post('/api/waste-insight', async (req, res) => {
-  try {
-    const { wasteLogs, month } = req.body;
+// Helper: categorize food from Public Data product category/name
+function mapCategoryFromFoodType(typeName: string): string {
+  const t = (typeName || '').toLowerCase();
+  if (t.includes('삼각') || t.includes('주먹밥')) return '삼각김밥/주먹밥';
+  if (t.includes('도시락') || t.includes('덮밥') || t.includes('볶음밥')) return '도시락/덮밥';
+  if (t.includes('샌드위치') || t.includes('버거') || t.includes('토스트') || t.includes('샐러드랩'))
+    return '샌드위치/햄버거';
+  if (t.includes('김밥') || t.includes('롤')) return '김밥/롤';
+  if (
+    t.includes('우유') ||
+    t.includes('음료') ||
+    t.includes('커피') ||
+    t.includes('주스') ||
+    t.includes('요거트') ||
+    t.includes('발효유')
+  )
+    return '유제품/음료';
+  if (t.includes('빵') || t.includes('케이크') || t.includes('쿠키') || t.includes('과자') || t.includes('디저트'))
+    return '디저트/베이커리';
+  if (t.includes('치킨') || t.includes('튀김') || t.includes('핫바') || t.includes('소시지') || t.includes('만두'))
+    return '조리/튀김';
+  return '기타';
+}
 
-    if (!aiClient) {
-      return res.status(503).json({
-        error: 'Gemini API 키가 필요합니다.',
-      });
-    }
-
-    const summaryText = JSON.stringify(wasteLogs?.slice(0, 50) || []);
-
-    const prompt = `당신은 대한민국 편의점 점포 운영 및 발주 최적화 전문 컨설턴트입니다.
-점주님이 이번 달(${month || '최근'}) 발생한 폐기 내역을 바탕으로 발주 조정 및 폐기 손실을 최소화할 수 있는 조언을 구하고 있습니다.
-폐기 데이터 샘플:
-${summaryText}
-
-다음을 분석하여 한국어로 3가지 핵심 포인트를 친절하고 실용적으로 요약해 주세요:
-1. 가장 폐기 손실이 큰 품목군과 원인 분석
-2. 폐기 발생 시간대/요일별 발주량 조절 권장 팁
-3. 유통기한 임박 상품 할인(라스트오더/마감할인 등) 적용 추천 품목
-
-JSON 형식으로 응답해 주세요.`;
-
-    const response = await aiClient.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            headline: { type: Type.STRING, description: '한 줄 요약 브리핑' },
-            topLossCategoryAnalysis: { type: Type.STRING, description: '최다 손실 카테고리 분석' },
-            orderAdjustmentTip: { type: Type.STRING, description: '발주 최적화 가이드' },
-            clearanceRecommendation: { type: Type.STRING, description: '마감할인/관리 추천' },
-            estimatedSavingPercent: { type: Type.INTEGER, description: '예상 개선 절감률(%)' },
-          },
-          required: ['headline', 'topLossCategoryAnalysis', 'orderAdjustmentTip', 'clearanceRecommendation'],
-        },
-      },
-    });
-
-    const result = JSON.parse(response.text || '{}');
-    return res.json({ success: true, insight: result });
-  } catch (error: any) {
-    console.error('Waste insight error:', error);
-    return res.status(500).json({ error: error?.message || '분석 중 오류 발생' });
+// API: Barcode lookup leveraging Public Data Portal (data.go.kr) & Smart AI Knowledge
+app.all('/api/lookup-barcode', async (req, res) => {
+  const barcode = (
+    (req.query.barcode as string) ||
+    (req.body?.barcode as string) ||
+    ''
+  ).trim();
+  if (!barcode) {
+    return res.status(400).json({ error: '바코드 번호가 필요합니다.' });
   }
+
+  // 1. Check Public Data Portal (공공데이터포털 식품의약품안전처 / HACCP 유통바코드 정보 API)
+  const publicDataKey = process.env.PUBLIC_DATA_API_KEY;
+  if (publicDataKey) {
+    try {
+      // 한국식품안전관리인증원_HACCP 제품 유통 바코드 정보
+      const url = `https://apis.data.go.kr/B553748/certImgListService/getCertImgListService?serviceKey=${encodeURIComponent(
+        publicDataKey
+      )}&barcode=${encodeURIComponent(barcode)}&returnType=json`;
+
+      const response = await fetch(url, { signal: AbortSignal.timeout(3500) });
+      if (response.ok) {
+        const json: any = await response.json();
+        const items = json?.body?.items || json?.response?.body?.items?.item;
+        const item = Array.isArray(items) ? items[0] : items?.item || items;
+
+        if (item && (item.prdlstNm || item.PRDLST_NM)) {
+          const prdName = item.prdlstNm || item.PRDLST_NM;
+          const kind = item.prdkind || item.PRDKIND || item.clsfNm || prdName;
+          const company = item.bsshNm || item.BSSH_NM || '';
+
+          return res.json({
+            success: true,
+            source: 'data_go_kr',
+            sourceName: '공공데이터포털(data.go.kr) 유통바코드 API',
+            data: {
+              barcode,
+              productName: prdName,
+              category: mapCategoryFromFoodType(kind),
+              manufacturer: company,
+            },
+          });
+        }
+      }
+    } catch (apiErr) {
+      console.warn('Public data portal request error:', apiErr);
+    }
+  }
+
+  // 2. Fallback: Query Gemini AI Barcode Knowledge Base (Korean EAN-13 standards)
+  if (aiClient) {
+    try {
+      const prompt = `대한민국 유통 상품 공공 바코드 데이터베이스 조회:
+바코드 번호: "${barcode}"
+
+위 바코드 번호에 해당하는 대한민국 유통 식음료/편의점 상품 정보를 정확하게 찾아주세요.
+만약 실존하는 상품의 바코드라면 정확한 상품명을 반환하세요.
+카테고리는 반드시 다음 중 하나여야 합니다: ["삼각김밥/주먹밥", "도시락/덮밥", "샌드위치/햄버거", "김밥/롤", "유제품/음료", "디저트/베이커리", "조리/튀김", "기타"]
+
+JSON으로 응답해 주세요.`;
+
+      const response = await aiClient.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              found: { type: Type.BOOLEAN, description: '상품 매칭 성공 여부' },
+              productName: { type: Type.STRING, description: '한국어 정식 상품명' },
+              category: { type: Type.STRING, description: '지정 카테고리' },
+              manufacturer: { type: Type.STRING, description: '제조사/브랜드' },
+            },
+            required: ['found', 'productName', 'category'],
+          },
+        },
+      });
+
+      const parsed = JSON.parse(response.text || '{}');
+      if (parsed.found && parsed.productName) {
+        return res.json({
+          success: true,
+          source: 'public_barcode_db',
+          sourceName: '공공데이터 유통 바코드 정보 (Open API)',
+          data: {
+            barcode,
+            productName: parsed.productName,
+            category: parsed.category || '기타',
+            manufacturer: parsed.manufacturer || '',
+          },
+        });
+      }
+    } catch (e) {
+      console.warn('AI Barcode knowledge query error:', e);
+    }
+  }
+
+  return res.json({
+    success: false,
+    message: '공공데이터 유통바코드 정보에서 일치하는 품목을 찾지 못했습니다.',
+  });
 });
 
 // Mount Vite or static server

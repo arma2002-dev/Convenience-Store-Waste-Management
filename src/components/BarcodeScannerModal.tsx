@@ -22,6 +22,7 @@ import {
   fileToBase64,
   findPresetProductByBarcode,
   scanBarcodeWithAI,
+  lookupBarcodeFromPublicAPI,
 } from '../utils/barcodeScanner';
 import { formatKRW } from '../utils/storage';
 
@@ -83,6 +84,35 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     };
   }, []);
 
+  const [isLookingUpBarcode, setIsLookingUpBarcode] = useState(false);
+
+  // Query product data from Public Data Portal (data.go.kr) & Open API
+  const fetchBarcodePublicInfo = async (code: string) => {
+    const clean = code.trim();
+    if (!clean || clean.length < 5) return;
+    setIsLookingUpBarcode(true);
+    setScanSuccessMessage('공공데이터포털 유통바코드 조회 중...');
+    try {
+      const info = await lookupBarcodeFromPublicAPI(clean);
+      if (info && info.productName) {
+        setProductName(info.productName);
+        if (info.category) {
+          setCategory(info.category);
+        }
+        setScanSuccessMessage(
+          `[${info.sourceName || '공공데이터포털'}] ${info.productName} 자동 조회 완료`
+        );
+        playSuccessChime();
+      } else {
+        setScanSuccessMessage(`바코드 [${clean}] 인식됨 (직접 상품명 확인 가능)`);
+      }
+    } catch (e) {
+      console.warn('Barcode lookup failed:', e);
+    } finally {
+      setIsLookingUpBarcode(false);
+    }
+  };
+
   // Quick lookup when barcode changes
   const handleBarcodeChange = (val: string) => {
     setBarcode(val);
@@ -90,7 +120,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     if (matched) {
       setProductName(matched.productName);
       setCategory(matched.category);
-      setScanSuccessMessage(`기등록 상품 자동 매칭: ${matched.productName}`);
+      setScanSuccessMessage(`유통 바코드 자동 매칭: ${matched.productName}`);
+    } else if (val.trim().length >= 8) {
+      // Auto-query when user finishes entering barcode digits
+      fetchBarcodePublicInfo(val);
     }
   };
 
@@ -193,20 +226,11 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   };
 
   // Process a detected barcode string
-  const handleDetectedBarcode = (code: string, successMsg: string) => {
+  const handleDetectedBarcode = async (code: string, successMsg: string) => {
     setBarcode(code);
-    const matched = findPresetProductByBarcode(code);
-    if (matched) {
-      setProductName(matched.productName);
-      setCategory(matched.category);
-      setScanSuccessMessage(`${successMsg} (${matched.productName})`);
-    } else {
-      setScanSuccessMessage(`${successMsg} (바코드 번호: ${code})`);
-      if (!productName) {
-        setProductName('신규 등록 상품 (' + code.slice(-4) + ')');
-      }
-    }
     playSuccessChime();
+    setScanSuccessMessage(`${successMsg} (바코드: ${code}) - 공공데이터 조회 중...`);
+    await fetchBarcodePublicInfo(code);
   };
 
   // Play subtle feedback chime
@@ -252,8 +276,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       const localBarcode = await decodeBarcodeFromImage(img);
 
       if (localBarcode) {
-        handleDetectedBarcode(localBarcode, '사진에서 바코드 감지 성공!');
         setIsAnalyzing(false);
+        await handleDetectedBarcode(localBarcode, '사진에서 바코드 감지 성공!');
         return;
       }
 
@@ -264,15 +288,17 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       if (aiResult) {
         if (aiResult.barcode) {
           setBarcode(aiResult.barcode);
+          await fetchBarcodePublicInfo(aiResult.barcode);
+        } else {
+          if (aiResult.productName) {
+            setProductName(aiResult.productName);
+          }
+          if (aiResult.category) {
+            setCategory(aiResult.category);
+          }
+          setScanSuccessMessage(`AI 스캔 완료: [${aiResult.productName}] 자동 입력`);
+          playSuccessChime();
         }
-        if (aiResult.productName) {
-          setProductName(aiResult.productName);
-        }
-        if (aiResult.category) {
-          setCategory(aiResult.category);
-        }
-        setScanSuccessMessage(`AI 스캔 완료: [${aiResult.productName}] 자동 입력`);
-        playSuccessChime();
       }
     } catch (err: any) {
       console.warn('AI scan error fallback:', err);
@@ -330,12 +356,15 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <Scan className="w-5 h-5 text-teal-600" />
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+              <Scan className="w-5 h-5 text-purple-700" />
               편의점 폐기 상품 등록
+              <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                공공데이터 유통바코드 API 연동
+              </span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              바코드 사진 스캔 및 자동인식으로 빠르게 등록하세요
+              공공데이터포털(data.go.kr) 유통바코드 정보 Open API & 사진 스캔으로 상품 자동 등록
             </p>
           </div>
           <button
@@ -525,26 +554,54 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             {/* Barcode and Product Name */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  바코드 번호 (880...)
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={barcode}
-                    onChange={(e) => handleBarcodeChange(e.target.value)}
-                    placeholder="바코드 13자리 입력"
-                    className="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  />
-                  {barcode && (
-                    <button
-                      type="button"
-                      onClick={() => handleBarcodeChange('')}
-                      className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    바코드 번호 (880...)
+                  </label>
+                  <span className="text-[11px] text-purple-700 font-medium">
+                    공공데이터포털(data.go.kr)
+                  </span>
+                </div>
+                <div className="flex gap-1.5">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={barcode}
+                      onChange={(e) => handleBarcodeChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          fetchBarcodePublicInfo(barcode);
+                        }
+                      }}
+                      placeholder="바코드 13자리 입력"
+                      className="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    />
+                    {barcode && (
+                      <button
+                        type="button"
+                        onClick={() => handleBarcodeChange('')}
+                        className="absolute right-2 top-2.5 text-slate-400 hover:text-slate-600"
+                        title="지우기"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fetchBarcodePublicInfo(barcode)}
+                    disabled={isLookingUpBarcode || !barcode.trim()}
+                    className="px-3 py-2 text-xs font-semibold bg-purple-700 hover:bg-purple-800 disabled:bg-slate-100 text-white disabled:text-slate-400 rounded-lg transition-all flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer disabled:cursor-not-allowed"
+                    title="공공데이터포털 유통바코드 정보 조회"
+                  >
+                    {isLookingUpBarcode ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Search className="w-3.5 h-3.5" />
+                    )}
+                    <span>공공데이터 조회</span>
+                  </button>
                 </div>
               </div>
 

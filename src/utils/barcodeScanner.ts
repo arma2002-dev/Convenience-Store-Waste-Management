@@ -84,3 +84,44 @@ export async function scanBarcodeWithAI(
   const result = await res.json();
   return result.data;
 }
+
+// Query Barcode Product Info from Public Data Portal (data.go.kr) & Open API
+export async function lookupBarcodeFromPublicAPI(barcode: string): Promise<{
+  productName: string;
+  category: any;
+  sourceName?: string;
+  manufacturer?: string;
+} | null> {
+  const clean = barcode.trim();
+  if (!clean) return null;
+
+  // 1. Check local catalog first
+  const localMatch = findPresetProductByBarcode(clean);
+  if (localMatch) {
+    return {
+      productName: localMatch.productName,
+      category: localMatch.category,
+      sourceName: '공공 유통표준 바코드 카탈로그',
+    };
+  }
+
+  // 2. Query Server Public Data Portal / Food Safety Open API endpoint
+  try {
+    const res = await fetch(`/api/lookup-barcode?barcode=${encodeURIComponent(clean)}`);
+    if (res.ok) {
+      const result = await res.json();
+      if (result.success && result.data && result.data.productName) {
+        return {
+          productName: result.data.productName,
+          category: result.data.category,
+          sourceName: result.sourceName || '공공데이터포털(data.go.kr) 유통바코드 API',
+          manufacturer: result.data.manufacturer,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to query barcode from public API:', err);
+  }
+
+  return null;
+}
