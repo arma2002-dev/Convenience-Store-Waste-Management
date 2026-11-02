@@ -6,13 +6,9 @@ import {
   Calendar,
   Clock,
   Package,
-  AlertCircle,
-  FileText,
-  DollarSign,
 } from 'lucide-react';
 import { WasteItem } from '../types/waste';
 import { CATEGORY_COLORS } from '../data/presetProducts';
-import { formatKRW } from '../utils/storage';
 
 interface DayDetailModalProps {
   isOpen: boolean;
@@ -45,38 +41,38 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({
   const totalQuantity = items.reduce((acc, cur) => acc + cur.quantity, 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/70 backdrop-blur-xs">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[85vh] transition-colors">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-teal-600" />
               {formattedDate} 폐기 내역
             </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               해당 일자에 발생한 폐기 항목 및 수량 확인/수정
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Day Summary banner */}
-        <div className="grid grid-cols-2 gap-3 p-4 bg-slate-100/70 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 text-center">
+        <div className="grid grid-cols-2 gap-3 p-4 bg-slate-100/70 border-b border-slate-200 text-center">
           <div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">등록 품목</div>
-            <div className="text-base font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+            <div className="text-[11px] font-medium text-slate-500">등록 품목</div>
+            <div className="text-base font-bold text-slate-900 tabular-nums">
               {items.length}건
             </div>
           </div>
           <div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">총 폐기 수량</div>
-            <div className="text-base font-bold text-purple-700 dark:text-purple-400 tabular-nums">
+            <div className="text-[11px] font-medium text-slate-500">총 폐기 수량</div>
+            <div className="text-base font-bold text-purple-700 tabular-nums">
               {totalQuantity}개
             </div>
           </div>
@@ -86,9 +82,9 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({
         <div className="flex-1 overflow-y-auto p-6 space-y-3">
           {items.length === 0 ? (
             <div className="py-12 flex flex-col items-center justify-center text-center">
-              <Package className="w-12 h-12 text-slate-300 dark:text-slate-700 stroke-1 mb-2" />
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">등록된 폐기 내역이 없습니다</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+              <Package className="w-12 h-12 text-slate-300 stroke-1 mb-2" />
+              <p className="text-sm font-semibold text-slate-700">등록된 폐기 내역이 없습니다</p>
+              <p className="text-xs text-slate-400 mt-1">
                 바코드 스캔 또는 직접 입력으로 폐기 상품을 등록해보세요.
               </p>
               <button
@@ -107,7 +103,7 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({
               return (
                 <div
                   key={item.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850/90 hover:border-slate-300 dark:hover:border-slate-700 transition-all gap-4"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-all gap-4"
                 >
                   {/* Left: Product Info */}
                   <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -115,7 +111,7 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({
                       <img
                         src={item.photoUrl}
                         alt={item.productName}
-                        className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                        className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
                       />
                     ) : (
                       <div
@@ -132,26 +128,26 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${catColor.bg} ${catColor.text} border ${catColor.border} dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200`}
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${catColor.bg} ${catColor.text} border ${catColor.border}`}
                         >
                           {item.category}
                         </span>
-                        <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-800">
+                        <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                           {item.barcode}
                         </span>
                         {item.disposalTime && (
-                          <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-0.5">
-                            <Clock className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                          <span className="text-[11px] text-slate-500 flex items-center gap-0.5">
+                            <Clock className="w-3 h-3 text-purple-600" />
                             {item.disposalTime}
                           </span>
                         )}
                       </div>
 
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mt-1 truncate">
+                      <h4 className="text-sm font-bold text-slate-900 mt-1 truncate">
                         {item.productName}
                       </h4>
 
-                      <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
                         <span>사유: {item.reason}</span>
                         {item.notes && <span>· {item.notes}</span>}
                       </div>
@@ -159,22 +155,22 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({
                   </div>
 
                   {/* Right: Quantity Adjuster & Delete Action */}
-                  <div className="flex items-center justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                    <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200">
                       <button
                         type="button"
                         onClick={() => onUpdateQuantity(item.id, Math.max(1, item.quantity - 1))}
-                        className="w-6 h-6 flex items-center justify-center rounded bg-white dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                        className="w-6 h-6 flex items-center justify-center rounded bg-white hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors shadow-2xs cursor-pointer"
                       >
                         -
                       </button>
-                      <span className="w-8 text-center text-xs font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                      <span className="w-8 text-center text-xs font-bold tabular-nums text-slate-900">
                         {item.quantity}
                       </span>
                       <button
                         type="button"
                         onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
-                        className="w-6 h-6 flex items-center justify-center rounded bg-white dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                        className="w-6 h-6 flex items-center justify-center rounded bg-white hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors shadow-2xs cursor-pointer"
                       >
                         +
                       </button>
@@ -183,7 +179,7 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({
                     <button
                       type="button"
                       onClick={() => onDeleteItem(item.id)}
-                      className="p-2 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                       title="폐기 내역 삭제"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -196,11 +192,11 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
           >
             닫기
           </button>

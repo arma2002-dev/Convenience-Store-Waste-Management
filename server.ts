@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
+import { PRESET_PRODUCTS } from './src/data/presetProducts';
 
 dotenv.config();
 
@@ -185,6 +186,20 @@ const KOREA_POPULAR_BARCODES: Record<string, { productName: string; category: st
   '8801007052990': { productName: 'CJ 햇반 백미 210g', category: '도시락/덮밥', manufacturer: 'CJ제일제당' },
   '8801045511015': { productName: '오뚜기 맛있는 오뚜기밥 210g', category: '도시락/덮밥', manufacturer: '오뚜기' },
 };
+
+// Merge all preset products into KOREA_POPULAR_BARCODES for instant lookup
+for (const p of PRESET_PRODUCTS) {
+  if (p.barcode) {
+    const clean = p.barcode.replace(/[^0-9]/g, '');
+    if (!KOREA_POPULAR_BARCODES[clean]) {
+      KOREA_POPULAR_BARCODES[clean] = {
+        productName: p.productName,
+        category: p.category,
+        manufacturer: p.storeBrand || '편의점 표준 유통상품',
+      };
+    }
+  }
+}
 
 // API: AI Barcode and Product Scanner from Image
 app.post('/api/scan-barcode-image', async (req, res) => {
@@ -375,13 +390,60 @@ function guessKoreanProductFromBarcode(barcode: string): { productName: string; 
     return { productName: '오비맥주 주류', category: '기타', manufacturer: '오비맥주' };
   }
   return {
-    productName: `한국 유통상품 (${clean})`,
+    productName: '',
     category: '기타',
     manufacturer: '대한민국 표준유통바코드(880)',
   };
 }
 
-// API: Barcode lookup leveraging Public Data Portal (data.go.kr) & Smart AI Knowledge
+// Food Safety Korea (식품안전나라 I2570 유통바코드 연계 API)
+async function fetchFoodSafetyKorea(barcode: string) {
+  try {
+    const url = `http://openapi.foodsafetykorea.go.kr/api/sample/I2570/json/1/1/BRCD_NO=${encodeURIComponent(barcode)}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(2500) });
+    if (response.ok) {
+      const json: any = await response.json();
+      const row = json?.I2570?.row?.[0];
+      if (row && row.PRDLST_NM) {
+        return {
+          productName: String(row.PRDLST_NM).trim(),
+          category: mapCategoryFromFoodType(row.PRD_KND || row.PRDLST_NM),
+          manufacturer: String(row.BSSH_NM || '').trim(),
+        };
+      }
+    }
+  } catch (err) {
+    // Ignore timeout / network err
+  }
+  return null;
+}
+
+// Open Food Facts API (글로벌/한국 상품 바코드 데이터베이스)
+async function fetchOpenFoodFacts(barcode: string) {
+  try {
+    const url = `https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode)}.json`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(2500) });
+    if (response.ok) {
+      const json: any = await response.json();
+      if (json?.status === 1 && json?.product) {
+        const p = json.product;
+        const name = p.product_name_ko || p.product_name || p.generic_name_ko || p.generic_name;
+        if (name && typeof name === 'string' && name.trim()) {
+          return {
+            productName: name.trim(),
+            category: mapCategoryFromFoodType(p.categories || name),
+            manufacturer: p.brands || '',
+          };
+        }
+      }
+    }
+  } catch (err) {
+    // Ignore timeout
+  }
+  return null;
+}
+
+// API: Barcode lookup leveraging Public Data Portal (data.go.kr) & Food Safety Open APIs
 app.all('/api/lookup-barcode', async (req, res) => {
   const barcode = (
     (req.query.barcode as string) ||
@@ -392,15 +454,18 @@ app.all('/api/lookup-barcode', async (req, res) => {
     return res.status(400).json({ error: '바코드 번호가 필요합니다.' });
   }
 
+  const clean = barcode.replace(/[^0-9]/g, '');
+
   // 1. Instant check in server-side Korea convenience store catalog
-  if (KOREA_POPULAR_BARCODES[barcode]) {
-    const item = KOREA_POPULAR_BARCODES[barcode];
+  if (KOREA_POPULAR_BARCODES[clean]) {
+    const item = KOREA_POPULAR_BARCODES[clean];
     return res.json({
       success: true,
+      found: true,
       source: 'convenience_catalog',
       sourceName: '공공 유통표준 바코드 카탈로그',
       data: {
-        barcode,
+        barcode: clean,
         productName: item.productName,
         category: item.category,
         manufacturer: item.manufacturer,
@@ -408,13 +473,64 @@ app.all('/api/lookup-barcode', async (req, res) => {
     });
   }
 
-  // 2. Check Public Data Portal (공공데이터포털 식품의약품안전처 / HACCP 유통바코드 정보 API)
+  // 1-1. Also check 12-digit UPC with leading zero or 13-digit without leading zero
+  if (clean.length === 12 && KOREA_POPULAR_BARCODES['0' + clean]) {
+    const item = KOREA_POPULAR_BARCODES['0' + clean];
+    return res.json({
+      success: true,
+      found: true,
+      source: 'convenience_catalog',
+      sourceName: '공공 유통표준 바코드 카탈로그',
+      data: {
+        barcode: clean,
+        productName: item.productName,
+        category: item.category,
+        manufacturer: item.manufacturer,
+      },
+    });
+  }
+
+  // 2. Query Food Safety Korea open API (식품안전나라 I2570 바코드 연계)
+  const foodSafetyResult = await fetchFoodSafetyKorea(clean);
+  if (foodSafetyResult && foodSafetyResult.productName) {
+    return res.json({
+      success: true,
+      found: true,
+      source: 'foodsafetykorea',
+      sourceName: '식품안전나라 공공데이터',
+      data: {
+        barcode: clean,
+        productName: foodSafetyResult.productName,
+        category: foodSafetyResult.category,
+        manufacturer: foodSafetyResult.manufacturer,
+      },
+    });
+  }
+
+  // 3. Query Open Food Facts open API
+  const openFoodResult = await fetchOpenFoodFacts(clean);
+  if (openFoodResult && openFoodResult.productName) {
+    return res.json({
+      success: true,
+      found: true,
+      source: 'openfoodfacts',
+      sourceName: '공공 유통 바코드 데이터베이스',
+      data: {
+        barcode: clean,
+        productName: openFoodResult.productName,
+        category: openFoodResult.category,
+        manufacturer: openFoodResult.manufacturer,
+      },
+    });
+  }
+
+  // 4. Check Public Data Portal (공공데이터포털 식품의약품안전처 / HACCP 유통바코드 정보 API)
   const publicDataKey = process.env.PUBLIC_DATA_API_KEY;
   if (publicDataKey) {
     try {
       const url = `https://apis.data.go.kr/B553748/certImgListService/getCertImgListService?serviceKey=${encodeURIComponent(
         publicDataKey
-      )}&barcode=${encodeURIComponent(barcode)}&returnType=json`;
+      )}&barcode=${encodeURIComponent(clean)}&returnType=json`;
 
       const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
       if (response.ok) {
@@ -429,10 +545,11 @@ app.all('/api/lookup-barcode', async (req, res) => {
 
           return res.json({
             success: true,
+            found: true,
             source: 'data_go_kr',
             sourceName: '공공데이터포털(data.go.kr) 유통바코드 API',
             data: {
-              barcode,
+              barcode: clean,
               productName: prdName,
               category: mapCategoryFromFoodType(kind),
               manufacturer: company,
@@ -445,10 +562,10 @@ app.all('/api/lookup-barcode', async (req, res) => {
     }
   }
 
-  // 3. Fallback: Query Gemini AI Barcode Knowledge Base (Korean EAN-13 standards)
+  // 5. Query Gemini AI Barcode Knowledge Base (if API key present)
   if (aiClient) {
     const prompt = `대한민국 유통 상품 공공 바코드 데이터베이스 조회:
-바코드 번호: "${barcode}"
+바코드 번호: "${clean}"
 
 위 바코드 번호에 해당하는 대한민국 유통 식음료/편의점 상품 정보를 정확하게 찾아주세요.
 만약 실존하는 상품의 바코드라면 정확한 상품명을 반환하세요.
@@ -482,7 +599,6 @@ JSON으로 응답해 주세요.`;
       try {
         parsed = await withTimeout(queryModel('gemini-3.8-flash'), 2000, '3.8 timeout');
       } catch (err38) {
-        // Skip cascade if quota or timeout
         console.warn('gemini-3.8-flash lookup skipped/failed:', (err38 as any)?.message);
       }
 
@@ -493,15 +609,17 @@ JSON으로 응답해 주세요.`;
         pName.includes('알 수 없음') ||
         pName.includes('미상') ||
         pName.includes('미확인') ||
+        pName.includes('한국 유통상품') ||
         parsed?.found === false;
 
       if (parsed && !isInvalidName) {
         return res.json({
           success: true,
+          found: true,
           source: 'public_barcode_db',
           sourceName: '공공데이터 유통 바코드 정보 (Open API)',
           data: {
-            barcode,
+            barcode: clean,
             productName: pName,
             category: parsed.category || '기타',
             manufacturer: parsed.manufacturer || '',
@@ -513,17 +631,34 @@ JSON으로 응답해 주세요.`;
     }
   }
 
-  // 4. Intelligent Prefix Fallback for Korean 880 barcodes
-  const guessed = guessKoreanProductFromBarcode(barcode);
+  // 6. Intelligent Prefix Fallback for Korean 880 barcodes (brand specific only, never generic "한국 유통상품")
+  const guessed = guessKoreanProductFromBarcode(clean);
+  if (guessed.productName && !guessed.productName.includes('한국 유통상품')) {
+    return res.json({
+      success: true,
+      found: true,
+      source: 'korea_standard_db',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      data: {
+        barcode: clean,
+        productName: guessed.productName,
+        category: guessed.category,
+        manufacturer: guessed.manufacturer,
+      },
+    });
+  }
+
+  // 7. Not found in any database: Return found: false with clean empty productName
   return res.json({
     success: true,
-    source: 'korea_standard_db',
-    sourceName: '공공 유통 표준 바코드(880) DB',
+    found: false,
+    source: 'unregistered',
+    sourceName: '신규 바코드',
     data: {
-      barcode,
-      productName: guessed.productName,
-      category: guessed.category,
-      manufacturer: guessed.manufacturer,
+      barcode: clean,
+      productName: '',
+      category: '기타',
+      manufacturer: '대한민국 유통바코드',
     },
   });
 });

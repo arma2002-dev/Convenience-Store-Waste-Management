@@ -2,10 +2,29 @@ import { BrowserMultiFormatReader } from '@zxing/browser';
 import { PRESET_PRODUCTS } from '../data/presetProducts';
 import { PresetProduct } from '../types/waste';
 
-// Local lookup by barcode number
+// Local lookup by barcode number (with digit normalization for 12/13 digit UPC/EAN)
 export function findPresetProductByBarcode(barcode: string): PresetProduct | undefined {
-  const clean = barcode.trim();
-  return PRESET_PRODUCTS.find((p) => p.barcode === clean);
+  if (!barcode) return undefined;
+  const clean = barcode.replace(/[^0-9]/g, '');
+  if (!clean) return undefined;
+
+  // 1. Exact match
+  const direct = PRESET_PRODUCTS.find((p) => p.barcode === clean);
+  if (direct) return direct;
+
+  // 2. Normalize 12-digit UPC-A to 13-digit EAN-13 (with leading 0)
+  if (clean.length === 12) {
+    const withZero = '0' + clean;
+    const match = PRESET_PRODUCTS.find((p) => p.barcode === withZero);
+    if (match) return match;
+  }
+  if (clean.length === 13 && clean.startsWith('0')) {
+    const withoutZero = clean.substring(1);
+    const match = PRESET_PRODUCTS.find((p) => p.barcode === withoutZero);
+    if (match) return match;
+  }
+
+  return undefined;
 }
 
 // Client-side barcode decoder from an image (Blob / File / HTMLImageElement / Canvas)
@@ -40,7 +59,6 @@ export async function decodeBarcodeFromImage(
       return result.getText();
     }
   } catch (err) {
-    // Expected when barcode is not sharply visible or angled
     console.debug('ZXing barcode not found in image:', err);
   }
 
@@ -85,14 +103,14 @@ export async function scanBarcodeWithAI(
   return result.data;
 }
 
-// Query Barcode Product Info from Public Data Portal (data.go.kr) & Open API
+// Query Barcode Product Info from Public Data Portal / Food Safety Open API / Preset Database
 export async function lookupBarcodeFromPublicAPI(barcode: string): Promise<{
   productName: string;
   category: any;
   sourceName?: string;
   manufacturer?: string;
 } | null> {
-  const clean = barcode.trim();
+  const clean = barcode.replace(/[^0-9]/g, '');
   if (!clean) return null;
 
   // 1. Check local catalog first
@@ -110,10 +128,15 @@ export async function lookupBarcodeFromPublicAPI(barcode: string): Promise<{
     const res = await fetch(`/api/lookup-barcode?barcode=${encodeURIComponent(clean)}`);
     if (res.ok) {
       const result = await res.json();
-      if (result.success && result.data && result.data.productName) {
+      if (
+        result.success &&
+        result.data &&
+        result.data.productName &&
+        !result.data.productName.includes('한국 유통상품')
+      ) {
         return {
           productName: result.data.productName,
-          category: result.data.category,
+          category: result.data.category || '기타',
           sourceName: result.sourceName || '공공데이터포털(data.go.kr) 유통바코드 API',
           manufacturer: result.data.manufacturer,
         };
@@ -123,12 +146,12 @@ export async function lookupBarcodeFromPublicAPI(barcode: string): Promise<{
     console.warn('Failed to query barcode from public API:', err);
   }
 
-  // 3. Fallback: If network is offline or unlisted, guess from Korean manufacturer prefix
+  // 3. Fallback: Intelligent Korean manufacturer brand recognition
   if (clean.startsWith('880103700')) {
     return {
       productName: '맥심 슈프림골드 커피믹스',
       category: '유제품/음료',
-      sourceName: '공공 유통 표준 바코드(880) DB',
+      sourceName: '공공 유통 표준 바코드 DB',
       manufacturer: '동서식품',
     };
   }
@@ -136,7 +159,7 @@ export async function lookupBarcodeFromPublicAPI(barcode: string): Promise<{
     return {
       productName: '맥심 화이트골드 커피믹스',
       category: '유제품/음료',
-      sourceName: '공공 유통 표준 바코드(880) DB',
+      sourceName: '공공 유통 표준 바코드 DB',
       manufacturer: '동서식품',
     };
   }
@@ -144,7 +167,7 @@ export async function lookupBarcodeFromPublicAPI(barcode: string): Promise<{
     return {
       productName: '맥심 모카골드 마일드 커피믹스',
       category: '유제품/음료',
-      sourceName: '공공 유통 표준 바코드(880) DB',
+      sourceName: '공공 유통 표준 바코드 DB',
       manufacturer: '동서식품',
     };
   }
@@ -152,7 +175,7 @@ export async function lookupBarcodeFromPublicAPI(barcode: string): Promise<{
     return {
       productName: '동아오츠카 포카리스웨트/음료',
       category: '유제품/음료',
-      sourceName: '공공 유통 표준 바코드(880) DB',
+      sourceName: '공공 유통 표준 바코드 DB',
       manufacturer: '동아오츠카',
     };
   }
@@ -160,14 +183,23 @@ export async function lookupBarcodeFromPublicAPI(barcode: string): Promise<{
     return {
       productName: '동서식품 맥심 커피/음료',
       category: '유제품/음료',
-      sourceName: '공공 유통 표준 바코드(880) DB',
+      sourceName: '공공 유통 표준 바코드 DB',
       manufacturer: '동서식품',
     };
   }
+  if (clean.startsWith('8809489') || clean.startsWith('88010628')) {
+    return {
+      productName: 'CU 편의점 프레시푸드',
+      category: '삼각김밥/주먹밥',
+      sourceName: 'CU BGF리테일 표준코드',
+      manufacturer: 'BGF리테일(CU)',
+    };
+  }
 
+  // 4. Return empty string so the UI NEVER fills in robotic "한국 유통상품"
   return {
-    productName: `한국 유통상품 (${clean})`,
+    productName: '',
     category: '기타',
-    sourceName: '대한민국 표준유통바코드(880)',
+    sourceName: '신규 바코드',
   };
 }

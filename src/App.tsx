@@ -23,37 +23,6 @@ export default function App() {
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
-  // Dark Mode State with localStorage persistence & system check
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    try {
-      const savedTheme = localStorage.getItem('cu_waste_theme');
-      if (savedTheme === 'dark') return true;
-      if (savedTheme === 'light') return false;
-      // Default to dark mode during typical convenience store night shifts (20:00 ~ 07:00) or system preference
-      const hour = new Date().getHours();
-      const isNightHours = hour >= 20 || hour < 7;
-      return isNightHours || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    } catch (e) {
-      return false;
-    }
-  });
-
-  // Apply dark mode class to html document element
-  useEffect(() => {
-    const root = document.documentElement;
-    if (isDarkMode) {
-      root.classList.add('dark');
-      localStorage.setItem('cu_waste_theme', 'dark');
-    } else {
-      root.classList.remove('dark');
-      localStorage.setItem('cu_waste_theme', 'light');
-    }
-  }, [isDarkMode]);
-
-  const handleToggleDarkMode = () => {
-    setIsDarkMode((prev) => !prev);
-  };
-
   // Search (Product Name or Barcode)
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -70,6 +39,14 @@ export default function App() {
   const [storeSettings, setStoreSettings] = useState<StoreSettings>(loadStoreSettings());
   const [isEditingStore, setIsEditingStore] = useState(false);
   const [storeNameInput, setStoreNameInput] = useState(storeSettings.storeName);
+
+  // Clean up any lingering dark mode class on mount
+  useEffect(() => {
+    document.documentElement.classList.remove('dark');
+    try {
+      localStorage.removeItem('cu_waste_theme');
+    } catch (e) {}
+  }, []);
 
   // Load items on mount
   useEffect(() => {
@@ -184,7 +161,7 @@ export default function App() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200">
+    <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 font-sans">
       {/* Top Bar Navigation */}
       <Navbar
         viewMode={viewMode}
@@ -200,16 +177,14 @@ export default function App() {
           setStoreSettings({ ...storeSettings, storeName: name });
           saveStoreSettings({ ...storeSettings, storeName: name });
         }}
-        isDarkMode={isDarkMode}
-        onToggleDarkMode={handleToggleDarkMode}
       />
 
       {/* Main Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Branch Context Banner & Quick Utilities */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs transition-colors">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/60 flex items-center justify-center text-purple-700 dark:text-purple-300 font-bold text-sm shrink-0 border border-purple-200 dark:border-purple-800/60">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-700 font-bold text-sm shrink-0 border border-purple-200">
               CU
             </div>
 
@@ -221,26 +196,26 @@ export default function App() {
                       type="text"
                       value={storeNameInput}
                       onChange={(e) => setStoreNameInput(e.target.value)}
-                      className="px-2 py-0.5 text-sm font-bold border border-purple-500 rounded focus:outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                      className="px-2 py-0.5 text-sm font-bold border border-purple-500 rounded focus:outline-none bg-white text-slate-900"
                     />
                     <button
                       type="button"
                       onClick={handleSaveStoreName}
-                      className="px-2 py-0.5 text-xs bg-purple-700 hover:bg-purple-800 text-white rounded font-medium transition-colors"
+                      className="px-2 py-0.5 text-xs bg-purple-700 hover:bg-purple-800 text-white rounded font-medium transition-colors cursor-pointer"
                     >
                       저장
                     </button>
                   </div>
                 ) : (
                   <>
-                    <h1 className="text-base font-bold text-slate-900 dark:text-slate-100">{storeSettings.storeName}</h1>
+                    <h1 className="text-base font-bold text-slate-900">{storeSettings.storeName}</h1>
                     <button
                       type="button"
                       onClick={() => {
                         setStoreNameInput(storeSettings.storeName);
                         setIsEditingStore(true);
                       }}
-                      className="text-[11px] text-purple-700 dark:text-purple-400 hover:text-purple-900 dark:hover:text-purple-300 underline"
+                      className="text-[11px] text-purple-700 hover:text-purple-900 underline cursor-pointer"
                     >
                       점포명 변경
                     </button>
@@ -248,7 +223,7 @@ export default function App() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
                 <span>CU봉암공단점 폐기 등록 및 현황 관리</span>
                 <span aria-hidden="true">·</span>
                 <span>바코드 사진 스캔 자동 입력</span>
@@ -265,52 +240,52 @@ export default function App() {
                 setScannerInitialTimeSlot(undefined);
                 setIsScannerOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-800 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200/80 dark:border-purple-800/60 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/60 transition-colors whitespace-nowrap cursor-pointer shadow-2xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-800 bg-purple-50 border border-purple-200/80 rounded-lg hover:bg-purple-100 transition-colors whitespace-nowrap cursor-pointer shadow-2xs"
             >
-              <Scan className="w-3.5 h-3.5 text-purple-700 dark:text-purple-400" />
+              <Scan className="w-3.5 h-3.5 text-purple-700" />
               사진 바코드 스캔
             </button>
 
             <button
               type="button"
               onClick={() => exportWasteToCSV(wasteItems, `CU봉암공단점_폐기대장.csv`)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors whitespace-nowrap cursor-pointer shadow-2xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap cursor-pointer shadow-2xs"
               title="CSV 엑셀 파일 다운로드"
             >
-              <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <Download className="w-3.5 h-3.5 text-slate-500" />
               엑셀 다운로드
             </button>
           </div>
         </div>
 
         {/* Search Bar (품목명 또는 바코드 검색) */}
-        <div className="bg-white dark:bg-slate-900 p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs transition-colors">
+        <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
           <div className="relative flex items-center">
-            <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3.5 pointer-events-none" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="품목명 또는 바코드 검색..."
-              className="w-full pl-10 pr-20 py-2 text-sm border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 bg-slate-50 dark:bg-slate-950 focus:bg-white dark:focus:bg-slate-950 transition-all text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              className="w-full pl-10 pr-20 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 bg-slate-50 focus:bg-white transition-all text-slate-900 placeholder:text-slate-400"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 px-2 py-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded font-medium transition-colors cursor-pointer"
+                className="absolute right-2.5 px-2 py-1 text-xs text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded font-medium transition-colors cursor-pointer"
               >
                 초기화
               </button>
             )}
           </div>
           {searchQuery.trim() && (
-            <div className="mt-2 text-xs text-purple-700 dark:text-purple-400 font-medium px-1 flex items-center justify-between">
+            <div className="mt-2 text-xs text-purple-700 font-medium px-1 flex items-center justify-between">
               <span>'{searchQuery}' 검색 결과: 총 {filteredItems.length}건</span>
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 underline cursor-pointer"
               >
                 검색 취소
               </button>
@@ -342,10 +317,10 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 text-center text-xs text-slate-500 dark:text-slate-400 transition-colors">
+      <footer className="mt-auto border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>CU봉암공단점 · 편의점 폐기 관리 시스템 (야간 안심 모드 지원)</span>
-          <span className="font-mono text-slate-500 dark:text-slate-400">
+          <span>CU봉암공단점 · 편의점 폐기 관리 시스템</span>
+          <span className="font-mono text-slate-500">
             총 {wasteItems.length}건 · {wasteItems.reduce((acc, c) => acc + c.quantity, 0)}개 폐기 등록됨
           </span>
         </div>

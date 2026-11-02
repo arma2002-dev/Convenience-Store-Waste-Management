@@ -3,14 +3,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  TrendingDown,
-  Package,
-  Calendar as CalendarIcon,
-  ShoppingBag,
 } from 'lucide-react';
-import { WasteItem, WasteCategory } from '../types/waste';
+import { WasteItem } from '../types/waste';
 import { CATEGORY_COLORS } from '../data/presetProducts';
-import { formatKRW } from '../utils/storage';
 
 interface MonthlyCalendarProps {
   currentDate: Date;
@@ -111,59 +106,59 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
   return (
     <div className="space-y-4">
       {/* Month Navigation & Metrics Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs transition-colors">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
         {/* Nav controls */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
             <button
               onClick={() => onNavigateMonth(-1)}
-              className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+              className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer"
               title="이전 달"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => onNavigateMonth(1)}
-              className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+              className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer"
               title="다음 달"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap">
+          <h2 className="text-xl font-bold tracking-tight text-slate-900 whitespace-nowrap">
             {year}년 {month + 1}월
           </h2>
 
           <button
             onClick={onSelectToday}
-            className="px-2.5 py-1 text-xs font-semibold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 rounded-md hover:bg-teal-100 dark:hover:bg-teal-900/60 transition-colors whitespace-nowrap cursor-pointer shadow-2xs"
+            className="px-2.5 py-1 text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 rounded-md hover:bg-teal-100 transition-colors whitespace-nowrap cursor-pointer shadow-2xs"
           >
             오늘
           </button>
         </div>
 
         {/* Monthly Summary Statistics strip */}
-        <div className="grid grid-cols-3 gap-3 lg:gap-6 border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100 dark:border-slate-800">
+        <div className="grid grid-cols-3 gap-3 lg:gap-6 border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100">
           <div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">당월 총 폐기 품목</div>
-            <div className="text-base font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+            <div className="text-[11px] font-medium text-slate-500">당월 총 폐기 품목</div>
+            <div className="text-base font-bold text-slate-900 tabular-nums">
               {monthItems.length}
-              <span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1">건</span>
+              <span className="text-xs font-normal text-slate-500 ml-1">건</span>
             </div>
           </div>
 
           <div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">당월 총 폐기 수량</div>
-            <div className="text-base font-bold text-purple-700 dark:text-purple-400 tabular-nums">
+            <div className="text-[11px] font-medium text-slate-500">당월 총 폐기 수량</div>
+            <div className="text-base font-bold text-purple-700 tabular-nums">
               {totalQuantity}
-              <span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1">개</span>
+              <span className="text-xs font-normal text-slate-500 ml-1">개</span>
             </div>
           </div>
 
           <div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">최다 폐기 카테고리</div>
-            <div className="text-base font-bold text-slate-800 dark:text-slate-200 truncate" title={topCategory}>
+            <div className="text-[11px] font-medium text-slate-500">최다 폐기 카테고리</div>
+            <div className="text-base font-bold text-slate-800 truncate" title={topCategory}>
               {topCategory}
             </div>
           </div>
@@ -171,18 +166,18 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
       </div>
 
       {/* Calendar Grid Container */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden transition-colors">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         {/* Days of week header */}
-        <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-center py-2.5 text-xs font-bold">
+        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center py-2.5 text-xs font-bold">
           {weekDayNames.map((name, idx) => (
             <div
               key={name}
               className={`${
                 idx === 0
-                  ? 'text-rose-600 dark:text-rose-400'
+                  ? 'text-rose-600'
                   : idx === 6
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : 'text-slate-600 dark:text-slate-400'
+                  ? 'text-blue-600'
+                  : 'text-slate-600'
               }`}
             >
               {name}요일
@@ -191,7 +186,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
         </div>
 
         {/* Day cells grid */}
-        <div className="grid grid-cols-7 divide-x divide-y divide-slate-100 dark:divide-slate-800">
+        <div className="grid grid-cols-7 divide-x divide-y divide-slate-100">
           {calendarCells.map((cell) => {
             const dayItems = itemsByDate[cell.dateStr] || [];
             const dayQuantity = dayItems.reduce((acc, c) => acc + c.quantity, 0);
@@ -203,9 +198,9 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                 onClick={() => onSelectDate(cell.dateStr)}
                 className={`group relative min-h-[110px] sm:min-h-[125px] p-2 sm:p-2.5 transition-all flex flex-col justify-between cursor-pointer ${
                   cell.isCurrentMonth
-                    ? 'bg-white dark:bg-slate-900 hover:bg-slate-50/80 dark:hover:bg-slate-850/80'
-                    : 'bg-slate-50/40 dark:bg-slate-950/60 text-slate-400 dark:text-slate-600'
-                } ${isToday ? 'ring-2 ring-teal-500 ring-inset bg-teal-50/20 dark:bg-teal-950/30' : ''}`}
+                    ? 'bg-white hover:bg-slate-50/80'
+                    : 'bg-slate-50/40 text-slate-400'
+                } ${isToday ? 'ring-2 ring-teal-500 ring-inset bg-teal-50/20' : ''}`}
               >
                 {/* Cell Header: Day Number and Action */}
                 <div className="flex items-center justify-between">
@@ -215,14 +210,14 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                         isToday
                           ? 'bg-teal-600 text-white'
                           : cell.isCurrentMonth
-                          ? 'text-slate-800 dark:text-slate-200'
-                          : 'text-slate-400 dark:text-slate-600'
+                          ? 'text-slate-800'
+                          : 'text-slate-400'
                       }`}
                     >
                       {cell.dayNum}
                     </span>
                     {isToday && (
-                      <span className="text-[10px] font-semibold text-teal-700 dark:text-teal-300 bg-teal-100/70 dark:bg-teal-900/60 px-1.5 py-0.2 rounded hidden sm:inline">
+                      <span className="text-[10px] font-semibold text-teal-700 bg-teal-100/70 px-1.5 py-0.2 rounded hidden sm:inline">
                         오늘
                       </span>
                     )}
@@ -235,7 +230,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                       e.stopPropagation();
                       onAddOnDate(cell.dateStr);
                     }}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 dark:text-slate-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950/60 rounded transition-all cursor-pointer"
+                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded transition-all cursor-pointer"
                     title={`${cell.dateStr} 폐기 등록`}
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -247,7 +242,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                   {dayItems.length > 0 ? (
                     <>
                       {/* Day summary label */}
-                      <div className="text-[11px] font-bold text-purple-700 dark:text-purple-400 tabular-nums">
+                      <div className="text-[11px] font-bold text-purple-700 tabular-nums">
                         <span>{dayQuantity}개 폐기</span>
                       </div>
 
@@ -259,7 +254,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                           return (
                             <div
                               key={item.id}
-                              className={`text-[10px] px-1.5 py-0.5 rounded truncate flex items-center gap-1 ${catColor.bg} ${catColor.text} border ${catColor.border} dark:bg-slate-800/90 dark:border-slate-700 dark:text-slate-200`}
+                              className={`text-[10px] px-1.5 py-0.5 rounded truncate flex items-center gap-1 ${catColor.bg} ${catColor.text} border ${catColor.border}`}
                               title={`${item.productName} (${item.quantity}개)`}
                             >
                               <span
@@ -273,7 +268,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                         })}
 
                         {dayItems.length > 2 && (
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium pl-1">
+                          <div className="text-[10px] text-slate-500 font-medium pl-1">
                             +{dayItems.length - 2}개 더보기
                           </div>
                         )}
@@ -281,7 +276,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
                     </>
                   ) : (
                     cell.isCurrentMonth && (
-                      <div className="h-full flex items-center justify-center opacity-0 group-hover:opacity-40 text-[10px] text-slate-400 dark:text-slate-600">
+                      <div className="h-full flex items-center justify-center opacity-0 group-hover:opacity-40 text-[10px] text-slate-400">
                         클릭하여 등록
                       </div>
                     )

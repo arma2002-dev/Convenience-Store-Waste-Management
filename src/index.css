@@ -1,14 +1,7 @@
 @import "tailwindcss";
-@custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   * {
     border-color: var(--color-slate-200);
-  }
-  .dark * {
-    border-color: var(--color-slate-800);
-  }
-  html.dark {
-    color-scheme: dark;
   }
 }
