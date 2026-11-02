@@ -8,19 +8,16 @@ import {
   loadStoreSettings,
   saveStoreSettings,
   exportWasteToCSV,
-  formatKRW,
   StoreSettings,
 } from './utils/storage';
 import { generateSeedData } from './data/seedData';
 import { Navbar } from './components/Navbar';
 import { MonthlyCalendar } from './components/MonthlyCalendar';
-import { WeeklyCalendar } from './components/WeeklyCalendar';
 import { BarcodeScannerModal } from './components/BarcodeScannerModal';
 import { DayDetailModal } from './components/DayDetailModal';
 
 export default function App() {
   const [wasteItems, setWasteItems] = useState<WasteItem[]>([]);
-  const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
   // Search (Product Name or Barcode)
@@ -102,13 +99,6 @@ export default function App() {
     setCurrentDate(newDate);
   };
 
-  // Week navigation
-  const handleNavigateWeek = (delta: number) => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + delta * 7);
-    setCurrentDate(newDate);
-  };
-
   // Select today
   const handleSelectToday = () => {
     setCurrentDate(new Date());
@@ -124,13 +114,6 @@ export default function App() {
   const handleAddOnDate = (dateStr: string) => {
     setScannerInitialDate(dateStr);
     setScannerInitialTimeSlot(undefined);
-    setIsScannerOpen(true);
-  };
-
-  // Open scanner with date and time
-  const handleAddOnDateAndTime = (dateStr: string, timeSlot: string) => {
-    setScannerInitialDate(dateStr);
-    setScannerInitialTimeSlot(timeSlot);
     setIsScannerOpen(true);
   };
 
@@ -164,8 +147,6 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 font-sans">
       {/* Top Bar Navigation */}
       <Navbar
-        viewMode={viewMode}
-        onChangeViewMode={(mode) => setViewMode(mode)}
         onOpenScanner={() => {
           setScannerInitialDate(new Date().toISOString().split('T')[0]);
           setScannerInitialTimeSlot(undefined);
@@ -293,27 +274,15 @@ export default function App() {
           )}
         </div>
 
-        {/* Calendar View Container */}
-        {viewMode === 'month' ? (
-          <MonthlyCalendar
-            currentDate={currentDate}
-            onNavigateMonth={handleNavigateMonth}
-            onSelectToday={handleSelectToday}
-            wasteItems={filteredItems}
-            onSelectDate={handleSelectDate}
-            onAddOnDate={handleAddOnDate}
-          />
-        ) : (
-          <WeeklyCalendar
-            currentDate={currentDate}
-            onNavigateWeek={handleNavigateWeek}
-            onSelectToday={handleSelectToday}
-            wasteItems={filteredItems}
-            onSelectDate={handleSelectDate}
-            onAddOnDateAndTime={handleAddOnDateAndTime}
-            onDeleteItem={handleDeleteItem}
-          />
-        )}
+        {/* Calendar View Container (월별 캘린더 단독 표시) */}
+        <MonthlyCalendar
+          currentDate={currentDate}
+          onNavigateMonth={handleNavigateMonth}
+          onSelectToday={handleSelectToday}
+          wasteItems={filteredItems}
+          onSelectDate={handleSelectDate}
+          onAddOnDate={handleAddOnDate}
+        />
       </main>
 
       {/* Footer */}
