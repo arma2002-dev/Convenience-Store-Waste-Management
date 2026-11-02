@@ -85,7 +85,7 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({
               <Package className="w-12 h-12 text-slate-300 stroke-1 mb-2" />
               <p className="text-sm font-semibold text-slate-700">등록된 폐기 내역이 없습니다</p>
               <p className="text-xs text-slate-400 mt-1">
-                바코드 스캔 또는 직접 입력으로 폐기 상품을 등록해보세요.
+                바코드 스캔으로 폐기 상품을 등록해보세요.
               </p>
               <button
                 type="button"
