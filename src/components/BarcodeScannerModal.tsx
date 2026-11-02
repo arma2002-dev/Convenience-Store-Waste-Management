@@ -47,6 +47,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const [reason, setReason] = useState<DisposalReason>('유통기한 경과');
   const [notes, setNotes] = useState('');
   const [scannedPhotoPreview, setScannedPhotoPreview] = useState<string | null>(null);
+  const [productPhoto, setProductPhoto] = useState<string | null>(null);
 
   // Scanner states
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -56,6 +57,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const productPhotoInputRef = useRef<HTMLInputElement>(null);
   const productNameInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<any>(null);
@@ -67,6 +69,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       if (initialDate) setDisposalDate(initialDate);
       setScanSuccessMessage(null);
       setCameraError(null);
+      setProductPhoto(null);
+      setScannedPhotoPreview(null);
       hasDetectedRef.current = false;
     } else {
       stopCamera();
@@ -360,6 +364,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     try {
       const base64 = await fileToBase64(file);
       setScannedPhotoPreview(base64);
+      setProductPhoto(base64);
 
       // 1. Try local barcode decode first via HTMLImageElement
       const img = new Image();
@@ -406,6 +411,41 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
   };
 
+  // Handle direct product photo upload / camera shot
+  const handleProductPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (uploadEvt) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        const compressed = canvas.toDataURL('image/jpeg', 0.85);
+        setProductPhoto(compressed);
+        setScanSuccessMessage('제품 실물 사진이 등록되었습니다.');
+        playSuccessChime();
+      };
+      img.src = uploadEvt.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+    if (e.target) e.target.value = '';
+  };
+
   // Submit Handler
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -430,7 +470,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       disposalTime: initialTimeSlot || '22:00',
       reason,
       notes: notes.trim(),
-      photoUrl: scannedPhotoPreview || undefined,
+      photoUrl: productPhoto || scannedPhotoPreview || undefined,
     });
 
     onClose();
@@ -712,6 +752,78 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white text-slate-900"
                 />
               </div>
+            </div>
+
+            {/* Product Photo Registration Section */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-purple-700" />
+                  제품 사진 등록 <span className="text-[11px] font-normal text-slate-400">(선택)</span>
+                </label>
+                {productPhoto && (
+                  <span className="text-[10px] text-teal-700 font-semibold bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                    사진 등록됨
+                  </span>
+                )}
+              </div>
+
+              {productPhoto ? (
+                <div className="flex items-center gap-3 p-2.5 bg-white rounded-lg border border-slate-200">
+                  <img
+                    src={productPhoto}
+                    alt="등록된 제품 사진"
+                    className="w-16 h-16 object-cover rounded-md border border-slate-200 shrink-0 shadow-2xs"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-slate-800">제품 실물 사진</p>
+                    <p className="text-[11px] text-slate-500">폐기 상품 사진이 등록되었습니다.</p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => productPhotoInputRef.current?.click()}
+                        className="text-xs text-purple-700 hover:text-purple-900 font-medium underline cursor-pointer"
+                      >
+                        사진 변경
+                      </button>
+                      <span className="text-slate-300">·</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProductPhoto(null);
+                          setScannedPhotoPreview(null);
+                        }}
+                        className="text-xs text-rose-600 hover:text-rose-800 font-medium underline cursor-pointer"
+                      >
+                        사진 삭제
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => productPhotoInputRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-3 bg-white hover:bg-purple-50/50 border border-dashed border-slate-300 hover:border-purple-400 rounded-lg text-xs font-medium text-slate-700 hover:text-purple-700 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <Camera className="w-4 h-4 text-purple-600" />
+                    <span>제품 사진 촬영 또는 이미지 파일 등록</span>
+                  </button>
+                </div>
+              )}
+
+              <input
+                ref={productPhotoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleProductPhotoUpload}
+              />
+              <p className="text-[11px] text-slate-400">
+                폐기 상품의 실물 또는 유통기한 라벨 사진을 함께 등록하여 증빙 자료로 활용할 수 있습니다.
+              </p>
             </div>
           </form>
         </div>

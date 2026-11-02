@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { Scan, Download, Search } from 'lucide-react';
+import { Scan, Download, Search, RotateCcw } from 'lucide-react';
 import { WasteItem } from './types/waste';
 import {
   loadWasteItems,
@@ -11,7 +11,6 @@ import {
   StoreSettings,
 } from './utils/storage';
 import { generateSeedData } from './data/seedData';
-import { Navbar } from './components/Navbar';
 import { MonthlyCalendar } from './components/MonthlyCalendar';
 import { BarcodeScannerModal } from './components/BarcodeScannerModal';
 import { DayDetailModal } from './components/DayDetailModal';
@@ -145,21 +144,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 font-sans">
-      {/* Top Bar Navigation */}
-      <Navbar
-        onOpenScanner={() => {
-          setScannerInitialDate(new Date().toISOString().split('T')[0]);
-          setScannerInitialTimeSlot(undefined);
-          setIsScannerOpen(true);
-        }}
-        onResetSampleData={handleResetSampleData}
-        storeSettings={storeSettings}
-        onChangeStoreName={(name) => {
-          setStoreSettings({ ...storeSettings, storeName: name });
-          saveStoreSettings({ ...storeSettings, storeName: name });
-        }}
-      />
-
       {/* Main Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Branch Context Banner & Quick Utilities */}
@@ -235,6 +219,16 @@ export default function App() {
             >
               <Download className="w-3.5 h-3.5 text-slate-500" />
               엑셀 다운로드
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetSampleData}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap cursor-pointer shadow-2xs"
+              title="샘플 데이터 복원"
+            >
+              <RotateCcw className="w-3 h-3 text-slate-400" />
+              데이터 복원
             </button>
           </div>
         </div>
