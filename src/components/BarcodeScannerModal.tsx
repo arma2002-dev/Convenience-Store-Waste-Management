@@ -187,16 +187,31 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   };
 
   // Quick lookup when barcode changes
+  const barcodeDebounceRef = useRef<any>(null);
+
   const handleBarcodeChange = (val: string) => {
     setBarcode(val);
     const clean = val.replace(/[\s-]/g, '');
+
+    // 1. Instant check in preset database
     const matched = findPresetProductByBarcode(clean);
     if (matched) {
       setProductName(matched.productName);
       if (matched.category) setCategory(matched.category);
       setScanSuccessMessage(`유통 바코드 자동 매칭: "${matched.productName}"`);
-    } else if (clean.length >= 8) {
-      fetchBarcodePublicInfo(clean);
+      playSuccessChime();
+      return;
+    }
+
+    // 2. Debounce public API lookup only when full standard barcode is reached (13, 12, or 8 digits)
+    if (barcodeDebounceRef.current) {
+      clearTimeout(barcodeDebounceRef.current);
+    }
+
+    if (clean.length === 13 || clean.length === 12 || clean.length === 8) {
+      barcodeDebounceRef.current = setTimeout(() => {
+        fetchBarcodePublicInfo(clean);
+      }, 350);
     }
   };
 

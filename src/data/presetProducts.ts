@@ -819,11 +819,35 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
 
   // 라면 / 간편식
   {
+    barcode: '8801043056953',
+    productName: '농심 신라면 골드 125g (봉지)',
+    category: '기타',
+    unitPrice: 1500,
+    costPrice: 1050,
+    defaultTimeSlot: '22:00',
+  },
+  {
+    barcode: '8801043056960',
+    productName: '농심 신라면 골드 큰사발면',
+    category: '기타',
+    unitPrice: 1800,
+    costPrice: 1260,
+    defaultTimeSlot: '22:00',
+  },
+  {
     barcode: '8801043005882',
-    productName: '농심 신라면 120g',
+    productName: '농심 신라면 120g (봉지)',
     category: '기타',
     unitPrice: 1000,
     costPrice: 700,
+    defaultTimeSlot: '22:00',
+  },
+  {
+    barcode: '8801043014830',
+    productName: '농심 신라면 멀티팩 (120g*5입)',
+    category: '기타',
+    unitPrice: 4800,
+    costPrice: 3360,
     defaultTimeSlot: '22:00',
   },
   {
@@ -832,6 +856,30 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
     category: '기타',
     unitPrice: 1400,
     costPrice: 980,
+    defaultTimeSlot: '22:00',
+  },
+  {
+    barcode: '8801043001815',
+    productName: '농심 신라면 컵 65g',
+    category: '기타',
+    unitPrice: 1100,
+    costPrice: 770,
+    defaultTimeSlot: '22:00',
+  },
+  {
+    barcode: '8801043012249',
+    productName: '농심 신라면 블랙 130g',
+    category: '기타',
+    unitPrice: 1700,
+    costPrice: 1190,
+    defaultTimeSlot: '22:00',
+  },
+  {
+    barcode: '8801043051026',
+    productName: '농심 신라면 더레드 125g',
+    category: '기타',
+    unitPrice: 1500,
+    costPrice: 1050,
     defaultTimeSlot: '22:00',
   },
   {

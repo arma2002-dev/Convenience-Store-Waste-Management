@@ -93,7 +93,6 @@ const KOREA_POPULAR_BARCODES: Record<string, { productName: string; category: st
   '8801043014853': { productName: '빙그레 바나나맛우유 240ml', category: '유제품/음료', manufacturer: '빙그레' },
   '8801043014860': { productName: '빙그레 딸기맛우유 240ml', category: '유제품/음료', manufacturer: '빙그레' },
   '8801043014877': { productName: '빙그레 커피맛우유 240ml', category: '유제품/음료', manufacturer: '빙그레' },
-  '8801043014830': { productName: '서울우유 200ml', category: '유제품/음료', manufacturer: '서울우유협동조합' },
   '8801115111011': { productName: '서울우유 흰우유 200ml', category: '유제품/음료', manufacturer: '서울우유' },
   '8801115111028': { productName: '서울우유 커피우유 200ml', category: '유제품/음료', manufacturer: '서울우유' },
   '8801115111035': { productName: '서울우유 초코우유 200ml', category: '유제품/음료', manufacturer: '서울우유' },
@@ -168,9 +167,23 @@ const KOREA_POPULAR_BARCODES: Record<string, { productName: string; category: st
   '8801123180223': { productName: '롯데 키스틱 소시지 45g', category: '조리/튀김', manufacturer: '롯데푸드' },
   '8801073180109': { productName: '삼양 불닭후랑크 70g', category: '조리/튀김', manufacturer: '삼양식품' },
   '8801007180105': { productName: '한성 크래미 90g', category: '조리/튀김', manufacturer: '한성기업' },
-  // 라면/간편식
-  '8801043005882': { productName: '농심 신라면 120g', category: '기타', manufacturer: '농심' },
+  // 라면/간편식 (신라면 전체 라인업 및 인기 라면)
+  '8801043056953': { productName: '농심 신라면 골드 125g (봉지)', category: '기타', manufacturer: '농심' },
+  '8801043056960': { productName: '농심 신라면 골드 큰사발면', category: '기타', manufacturer: '농심' },
+  '8801043005882': { productName: '농심 신라면 120g (봉지)', category: '기타', manufacturer: '농심' },
+  '8801043014830': { productName: '농심 신라면 멀티팩 (120g*5입)', category: '기타', manufacturer: '농심' },
   '8801043015843': { productName: '농심 신라면 큰사발면 114g', category: '기타', manufacturer: '농심' },
+  '8801043001815': { productName: '농심 신라면 컵 65g', category: '기타', manufacturer: '농심' },
+  '8801043012249': { productName: '농심 신라면 블랙 130g', category: '기타', manufacturer: '농심' },
+  '8801043012256': { productName: '농심 신라면 블랙 사발 101g', category: '기타', manufacturer: '농심' },
+  '8801043051026': { productName: '농심 신라면 더레드 125g', category: '기타', manufacturer: '농심' },
+  '8801043051033': { productName: '농심 신라면 더레드 큰사발면', category: '기타', manufacturer: '농심' },
+  '8801043048033': { productName: '농심 신라면 볶음면 131g', category: '기타', manufacturer: '농심' },
+  '8801043048040': { productName: '농심 신라면 볶음면 큰사발면', category: '기타', manufacturer: '농심' },
+  '8801043050111': { productName: '농심 신라면 건면 97g', category: '기타', manufacturer: '농심' },
+  '8801043050128': { productName: '농심 신라면 건면 사발', category: '기타', manufacturer: '농심' },
+  '8801043050135': { productName: '농심 신라면 툼바 큰사발면', category: '기타', manufacturer: '농심' },
+  '8801043050142': { productName: '농심 신라면 툼바 봉지 137g', category: '기타', manufacturer: '농심' },
   '8801043015287': { productName: '농심 육개장 사발면 86g', category: '기타', manufacturer: '농심' },
   '8801043015294': { productName: '농심 김치사발면 86g', category: '기타', manufacturer: '농심' },
   '8801043014839': { productName: '농심 짜파게티 140g', category: '기타', manufacturer: '농심' },
@@ -446,6 +459,47 @@ async function fetchOpenFoodFacts(barcode: string) {
   return null;
 }
 
+// Function to fetch official HACCP product image by product name (reverse search in CertImgListServiceV3)
+async function fetchHaccpImageByProductName(productName: string, customKey?: string): Promise<string | undefined> {
+  const serviceKey =
+    customKey ||
+    process.env.HACCP_API_KEY ||
+    process.env.PUBLIC_DATA_API_KEY ||
+    process.env.DATA_GO_KR_KEY;
+  if (!serviceKey || !productName) return undefined;
+
+  // Extract core product name (e.g., '농심 신라면 골드 125g' -> '신라면')
+  const cleanName = productName
+    .replace(/^(농심|오뚜기|삼양식품|삼양|팔도|롯데웰푸드|롯데|해태제과|해태|CJ제일제당|CJ|빙그레|서울우유|매일유업|남양유업|남양|동서식품|코카콜라|웅진|동아오츠카|SPC삼립|삼립)\s*/, '')
+    .trim();
+  const keyword = cleanName.split(' ')[0] || cleanName;
+  if (!keyword || keyword.length < 2) return undefined;
+
+  const formattedKey = serviceKey.includes('%') ? serviceKey : encodeURIComponent(serviceKey);
+  const url = `https://apis.data.go.kr/B553748/CertImgListServiceV3/getCertImgListServiceV3?serviceKey=${formattedKey}&prdlstNm=${encodeURIComponent(
+    keyword
+  )}&returnType=json&pageNo=1&numOfRows=5`;
+
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(2500) });
+    if (res.ok) {
+      const json: any = await res.json();
+      const items = json?.body?.items || json?.response?.body?.items;
+      const list = Array.isArray(items) ? items : items?.item ? (Array.isArray(items.item) ? items.item : [items.item]) : [];
+      for (const it of list) {
+        const obj = it?.item || it;
+        const img = obj?.imgurl1 || obj?.IMGURL1 || obj?.imgurl2 || obj?.IMGURL2;
+        if (img && typeof img === 'string' && img.startsWith('http')) {
+          return img;
+        }
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return undefined;
+}
+
 // Function to query HACCP 제품이미지 및 포장지표기정보 조회 (data.go.kr)
 // End Point: https://apis.data.go.kr/B553748/CertImgListServiceV3
 async function fetchHaccpCertImgListServiceV3(barcode: string, customKey?: string) {
@@ -477,19 +531,26 @@ async function fetchHaccpCertImgListServiceV3(barcode: string, customKey?: strin
         const json = JSON.parse(text);
         const body = json?.body || json?.response?.body;
         const items = body?.items;
-        let item: any = null;
+        let itemList: any[] = [];
         if (Array.isArray(items)) {
-          item = items[0]?.item || items[0];
+          itemList = items.map((it: any) => it?.item || it);
         } else if (items?.item) {
-          item = Array.isArray(items.item) ? items.item[0] : items.item;
+          itemList = Array.isArray(items.item) ? items.item : [items.item];
         }
 
-        if (item && (item.prdlstNm || item.PRDLST_NM)) {
-          const prdName = String(item.prdlstNm || item.PRDLST_NM).trim();
-          const kind = String(item.prdkind || item.PRDKIND || item.clsfNm || '').trim();
-          const company = String(item.bsshNm || item.BSSH_NM || '').trim();
-          const img1 = item.imgurl1 || item.IMGURL1 || '';
-          const img2 = item.imgurl2 || item.IMGURL2 || '';
+        // CRITICAL: CertImgListServiceV3 ignores the barcode query parameter and returns all products.
+        // Therefore, we must strictly verify that the item's barcode matches the requested barcode!
+        const matchedItem = itemList.find((it: any) => {
+          const itemBarcode = String(it?.barcode || it?.BARCODE || '').replace(/[^0-9]/g, '');
+          return itemBarcode && (itemBarcode === clean || itemBarcode.endsWith(clean) || clean.endsWith(itemBarcode));
+        });
+
+        if (matchedItem && (matchedItem.prdlstNm || matchedItem.PRDLST_NM)) {
+          const prdName = String(matchedItem.prdlstNm || matchedItem.PRDLST_NM).trim();
+          const kind = String(matchedItem.prdkind || matchedItem.PRDKIND || matchedItem.clsfNm || '').trim();
+          const company = String(matchedItem.bsshNm || matchedItem.BSSH_NM || matchedItem.manufacture || '').trim();
+          const img1 = matchedItem.imgurl1 || matchedItem.IMGURL1 || '';
+          const img2 = matchedItem.imgurl2 || matchedItem.IMGURL2 || '';
           const photo = img1 || img2 || undefined;
 
           return {
@@ -497,10 +558,10 @@ async function fetchHaccpCertImgListServiceV3(barcode: string, customKey?: strin
             category: mapCategoryFromFoodType(kind || prdName),
             manufacturer: company,
             photoUrl: photo,
-            rawmtrl: item.rawmtrl || '',
-            nutrient: item.nutrient || '',
-            capacity: item.capacity || '',
-            prdlstReportNo: item.prdlstReportNo || '',
+            rawmtrl: matchedItem.rawmtrl || '',
+            nutrient: matchedItem.nutrient || '',
+            capacity: matchedItem.capacity || '',
+            prdlstReportNo: matchedItem.prdlstReportNo || '',
             sourceName: 'HACCP 제품이미지 및 포장지표기정보(V3)',
           };
         }
@@ -509,73 +570,38 @@ async function fetchHaccpCertImgListServiceV3(barcode: string, customKey?: strin
       }
     }
 
-    // 2. Parse XML format (either when returned as XML or if returnType wasn't honored)
+    // 2. Parse XML format (verify barcode in XML)
     if (text.includes('<prdlstNm>') || text.includes('<PRDLST_NM>')) {
       const getTag = (tag: string): string => {
         const m = text.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
         return m ? m[1].replace(/<!\[CDATA\[(.*?)\]\]>/gi, '$1').trim() : '';
       };
-      const prdName = getTag('prdlstNm') || getTag('PRDLST_NM');
-      if (prdName) {
-        const kind = getTag('prdkind') || getTag('PRDKIND') || getTag('clsfNm');
-        const company = getTag('bsshNm') || getTag('BSSH_NM');
-        const img1 = getTag('imgurl1') || getTag('IMGURL1');
-        const img2 = getTag('imgurl2') || getTag('IMGURL2');
-        const photo = img1 || img2 || undefined;
-
-        return {
-          productName: prdName,
-          category: mapCategoryFromFoodType(kind || prdName),
-          manufacturer: company,
-          photoUrl: photo,
-          rawmtrl: getTag('rawmtrl'),
-          nutrient: getTag('nutrient'),
-          capacity: getTag('capacity'),
-          prdlstReportNo: getTag('prdlstReportNo'),
-          sourceName: 'HACCP 제품이미지 및 포장지표기정보(V3 XML)',
-        };
-      }
-    }
-  } catch (err) {
-    console.warn('HACCP V3 API query error:', err);
-  }
-
-  // 3. Fallback to older HACCP endpoint if V3 returns empty
-  try {
-    const urlLegacy = `https://apis.data.go.kr/B553748/certImgListService/getCertImgListService?serviceKey=${formattedKey}&barcode=${encodeURIComponent(
-      clean
-    )}&returnType=json`;
-    const response = await fetch(urlLegacy, { signal: AbortSignal.timeout(3000) });
-    if (response.ok) {
-      const text = await response.text();
-      if (text.trim().startsWith('{')) {
-        const json = JSON.parse(text);
-        const items = json?.body?.items || json?.response?.body?.items;
-        let item: any = null;
-        if (Array.isArray(items)) {
-          item = items[0]?.item || items[0];
-        } else if (items?.item) {
-          item = Array.isArray(items.item) ? items.item[0] : items.item;
-        }
-
-        if (item && (item.prdlstNm || item.PRDLST_NM)) {
-          const prdName = String(item.prdlstNm || item.PRDLST_NM).trim();
-          const kind = String(item.prdkind || item.PRDKIND || item.clsfNm || '').trim();
-          const company = String(item.bsshNm || item.BSSH_NM || '').trim();
-          const photo = item.imgurl1 || item.IMGURL1 || item.imgurl2 || item.IMGURL2 || undefined;
+      const xmlBarcode = (getTag('barcode') || getTag('BARCODE')).replace(/[^0-9]/g, '');
+      if (xmlBarcode && (xmlBarcode === clean || xmlBarcode.endsWith(clean) || clean.endsWith(xmlBarcode))) {
+        const prdName = getTag('prdlstNm') || getTag('PRDLST_NM');
+        if (prdName) {
+          const kind = getTag('prdkind') || getTag('PRDKIND') || getTag('clsfNm');
+          const company = getTag('bsshNm') || getTag('BSSH_NM');
+          const img1 = getTag('imgurl1') || getTag('IMGURL1');
+          const img2 = getTag('imgurl2') || getTag('IMGURL2');
+          const photo = img1 || img2 || undefined;
 
           return {
             productName: prdName,
             category: mapCategoryFromFoodType(kind || prdName),
             manufacturer: company,
             photoUrl: photo,
-            sourceName: 'HACCP 제품이미지 공공데이터',
+            rawmtrl: getTag('rawmtrl'),
+            nutrient: getTag('nutrient'),
+            capacity: getTag('capacity'),
+            prdlstReportNo: getTag('prdlstReportNo'),
+            sourceName: 'HACCP 제품이미지 및 포장지표기정보(V3 XML)',
           };
         }
       }
     }
   } catch (err) {
-    // Ignore legacy fallback error
+    console.warn('HACCP V3 API query error:', err);
   }
 
   return null;
@@ -658,6 +684,7 @@ app.all('/api/lookup-barcode', async (req, res) => {
   // 1. Instant check in server-side Korea convenience store catalog
   if (KOREA_POPULAR_BARCODES[clean]) {
     const item = KOREA_POPULAR_BARCODES[clean];
+    const photoUrl = await fetchHaccpImageByProductName(item.productName, customServiceKey);
     return res.json({
       success: true,
       found: true,
@@ -668,6 +695,7 @@ app.all('/api/lookup-barcode', async (req, res) => {
         productName: item.productName,
         category: item.category,
         manufacturer: item.manufacturer,
+        photoUrl: photoUrl || undefined,
       },
     });
   }
@@ -675,6 +703,7 @@ app.all('/api/lookup-barcode', async (req, res) => {
   // 1-1. Also check 12-digit UPC with leading zero or 13-digit without leading zero
   if (clean.length === 12 && KOREA_POPULAR_BARCODES['0' + clean]) {
     const item = KOREA_POPULAR_BARCODES['0' + clean];
+    const photoUrl = await fetchHaccpImageByProductName(item.productName, customServiceKey);
     return res.json({
       success: true,
       found: true,
@@ -685,6 +714,7 @@ app.all('/api/lookup-barcode', async (req, res) => {
         productName: item.productName,
         category: item.category,
         manufacturer: item.manufacturer,
+        photoUrl: photoUrl || undefined,
       },
     });
   }
