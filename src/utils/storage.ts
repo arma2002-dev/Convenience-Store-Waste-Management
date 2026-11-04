@@ -57,6 +57,156 @@ export function saveStoreSettings(settings: StoreSettings): void {
   }
 }
 
+// ========================================================
+// Server Cloud Sync APIs (PC & Mobile Cross-Device Support)
+// ========================================================
+
+export interface ServerSyncResult {
+  items: WasteItem[];
+  storeSettings?: StoreSettings;
+  version: number;
+  lastUpdated?: string;
+}
+
+// Fetch all items from server
+export async function fetchWasteItemsFromServer(): Promise<ServerSyncResult | null> {
+  try {
+    const res = await fetch('/api/waste-items');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.items)) {
+      saveWasteItems(data.items);
+      if (data.storeSettings) {
+        saveStoreSettings(data.storeSettings);
+      }
+      return {
+        items: data.items,
+        storeSettings: data.storeSettings,
+        version: data.version || 1,
+        lastUpdated: data.lastUpdated,
+      };
+    }
+  } catch (err) {
+    console.warn('Network sync with server failed, using local storage:', err);
+  }
+  return null;
+}
+
+// Add an item to the server
+export async function addWasteItemServer(
+  item: Omit<WasteItem, 'id' | 'registeredAt'> & { id?: string; registeredAt?: string }
+): Promise<WasteItem | null> {
+  try {
+    const res = await fetch('/api/waste-items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(item),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.success && data.item) {
+      return data.item;
+    }
+  } catch (err) {
+    console.error('Failed to save waste item to server:', err);
+  }
+  return null;
+}
+
+// Update quantity / details on server
+export async function updateWasteItemServer(
+  id: string,
+  updates: { quantity?: number; notes?: string; disposalTime?: string }
+): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/waste-items/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('Failed to update waste item on server:', err);
+    return false;
+  }
+}
+
+// Delete item on server
+export async function deleteWasteItemServer(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/waste-items/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('Failed to delete waste item on server:', err);
+    return false;
+  }
+}
+
+// Merge local client items into server (prevents any data loss from offline/previous mobile session)
+export async function syncLocalWasteItemsToServer(
+  localItems: WasteItem[]
+): Promise<ServerSyncResult | null> {
+  try {
+    const res = await fetch('/api/waste-items/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientItems: localItems }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.items)) {
+      saveWasteItems(data.items);
+      if (data.storeSettings) {
+        saveStoreSettings(data.storeSettings);
+      }
+      return {
+        items: data.items,
+        storeSettings: data.storeSettings,
+        version: data.version || 1,
+        lastUpdated: data.lastUpdated,
+      };
+    }
+  } catch (err) {
+    console.warn('Initial sync to server failed:', err);
+  }
+  return null;
+}
+
+// Reset data on server
+export async function resetWasteItemsServer(): Promise<WasteItem[] | null> {
+  try {
+    const res = await fetch('/api/waste-items/reset', {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.items)) {
+      saveWasteItems(data.items);
+      return data.items;
+    }
+  } catch (err) {
+    console.error('Failed to reset waste items on server:', err);
+  }
+  return null;
+}
+
+// Save store settings to server
+export async function saveStoreSettingsServer(settings: StoreSettings): Promise<boolean> {
+  try {
+    const res = await fetch('/api/store-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('Failed to save store settings to server:', err);
+    return false;
+  }
+}
+
 // Format numbers as Korean currency (e.g. 14,500원)
 export function formatKRW(val: number): string {
   return val.toLocaleString('ko-KR') + '원';

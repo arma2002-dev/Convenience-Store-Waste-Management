@@ -1,9 +1,12 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
 import { PRESET_PRODUCTS } from './src/data/presetProducts';
+import { generateSeedData } from './src/data/seedData';
+import { WasteItem } from './src/types/waste';
 
 dotenv.config();
 
@@ -11,6 +14,74 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// ==========================================
+// Persistent Shared Waste Data Store (Cross-Device Sync)
+// Allows Mobile & PC to instantly synchronize registered waste items
+// ==========================================
+interface WasteDataStore {
+  items: WasteItem[];
+  storeSettings: {
+    storeName: string;
+    brand: 'CU' | 'GS25' | '7-ELEVEN' | '이마트24' | '개인/기타';
+    costRatio: number;
+  };
+  version: number;
+  lastUpdated: string;
+}
+
+const DATA_DIR = path.resolve(__dirname, 'data');
+const DATA_FILE = path.join(DATA_DIR, 'waste-records.json');
+
+function initDataStore(): WasteDataStore {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed.items)) {
+        console.log(`Loaded ${parsed.items.length} waste items from persistent store.`);
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to read waste-records.json, reinitializing:', err);
+  }
+
+  const initialStore: WasteDataStore = {
+    items: generateSeedData(),
+    storeSettings: {
+      storeName: 'CU봉암공단점',
+      brand: 'CU',
+      costRatio: 0.7,
+    },
+    version: 1,
+    lastUpdated: new Date().toISOString(),
+  };
+
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(initialStore, null, 2), 'utf-8');
+    console.log(`Initialized persistent store with ${initialStore.items.length} seed items.`);
+  } catch (err) {
+    console.error('Failed to write initial waste data file:', err);
+  }
+
+  return initialStore;
+}
+
+const inMemoryStore = initDataStore();
+
+function persistDataStore() {
+  try {
+    inMemoryStore.version = (inMemoryStore.version || 1) + 1;
+    inMemoryStore.lastUpdated = new Date().toISOString();
+    fs.writeFileSync(DATA_FILE, JSON.stringify(inMemoryStore, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to persist waste records to disk:', err);
+  }
+}
 
 // Determine port safely:
 // Dev server MUST bind to port 3000 (as required by AI Studio iframe/dev environment).
@@ -874,6 +945,188 @@ JSON으로 응답해 주세요.`;
       manufacturer: '대한민국 유통바코드',
     },
   });
+});
+
+// -------------------------------------------------------------
+// Cross-Device Synchronization APIs for Waste Items & Settings
+// -------------------------------------------------------------
+
+// 1. Get all waste items & store settings
+app.get('/api/waste-items', (_req, res) => {
+  return res.json({
+    success: true,
+    items: inMemoryStore.items,
+    storeSettings: inMemoryStore.storeSettings,
+    version: inMemoryStore.version,
+    lastUpdated: inMemoryStore.lastUpdated,
+  });
+});
+
+// 2. Add a new waste item
+app.post('/api/waste-items', (req, res) => {
+  try {
+    const itemData = req.body;
+    if (!itemData || !itemData.productName || !itemData.date) {
+      return res.status(400).json({ success: false, error: '상품명과 날짜는 필수 입력 항목입니다.' });
+    }
+
+    const newItem: WasteItem = {
+      ...itemData,
+      id: itemData.id || `waste-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      registeredAt: itemData.registeredAt || new Date().toISOString(),
+      quantity: Number(itemData.quantity) || 1,
+    };
+
+    // Prepend new item
+    inMemoryStore.items = [newItem, ...inMemoryStore.items];
+    persistDataStore();
+
+    console.log(`[API] Added waste item: ${newItem.productName} (${newItem.date}). Total items: ${inMemoryStore.items.length}`);
+
+    return res.json({
+      success: true,
+      item: newItem,
+      totalCount: inMemoryStore.items.length,
+      version: inMemoryStore.version,
+      lastUpdated: inMemoryStore.lastUpdated,
+    });
+  } catch (err: any) {
+    console.error('Error adding waste item:', err);
+    return res.status(500).json({ success: false, error: err.message || '저장 중 오류 발생' });
+  }
+});
+
+// 3. Update quantity or details of an existing waste item
+app.put('/api/waste-items/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quantity, notes, disposalTime, unitPrice, costPrice } = req.body;
+    const index = inMemoryStore.items.findIndex((item) => item.id === id);
+    if (index === -1) {
+      return res.status(404).json({ success: false, error: '해당 폐기 내역을 찾을 수 없습니다.' });
+    }
+
+    inMemoryStore.items[index] = {
+      ...inMemoryStore.items[index],
+      ...(quantity !== undefined ? { quantity: Math.max(1, Number(quantity)) } : {}),
+      ...(notes !== undefined ? { notes } : {}),
+      ...(disposalTime !== undefined ? { disposalTime } : {}),
+      ...(unitPrice !== undefined ? { unitPrice: Number(unitPrice) } : {}),
+      ...(costPrice !== undefined ? { costPrice: Number(costPrice) } : {}),
+    };
+
+    persistDataStore();
+
+    return res.json({
+      success: true,
+      item: inMemoryStore.items[index],
+      version: inMemoryStore.version,
+      lastUpdated: inMemoryStore.lastUpdated,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. Delete a waste item
+app.delete('/api/waste-items/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const initialLen = inMemoryStore.items.length;
+    inMemoryStore.items = inMemoryStore.items.filter((item) => item.id !== id);
+
+    if (inMemoryStore.items.length !== initialLen) {
+      persistDataStore();
+    }
+
+    return res.json({
+      success: true,
+      deletedId: id,
+      totalCount: inMemoryStore.items.length,
+      version: inMemoryStore.version,
+      lastUpdated: inMemoryStore.lastUpdated,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. Bulk Sync & Merge (retains items registered previously on mobile or PC)
+app.post('/api/waste-items/sync', (req, res) => {
+  try {
+    const { clientItems } = req.body;
+    if (Array.isArray(clientItems) && clientItems.length > 0) {
+      const serverIds = new Set(inMemoryStore.items.map((i) => i.id));
+      let addedCount = 0;
+
+      for (const clientItem of clientItems) {
+        // If client item is not in server and is not a default seed item, merge it
+        if (!serverIds.has(clientItem.id) && clientItem.productName && !clientItem.id.startsWith('seed-')) {
+          inMemoryStore.items.unshift(clientItem);
+          serverIds.add(clientItem.id);
+          addedCount++;
+        }
+      }
+
+      if (addedCount > 0) {
+        console.log(`[API] Merged ${addedCount} custom items from client into shared server store.`);
+        persistDataStore();
+      }
+    }
+
+    return res.json({
+      success: true,
+      items: inMemoryStore.items,
+      storeSettings: inMemoryStore.storeSettings,
+      version: inMemoryStore.version,
+      lastUpdated: inMemoryStore.lastUpdated,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Reset to initial seed data
+app.post('/api/waste-items/reset', (_req, res) => {
+  try {
+    inMemoryStore.items = generateSeedData();
+    persistDataStore();
+
+    return res.json({
+      success: true,
+      items: inMemoryStore.items,
+      version: inMemoryStore.version,
+      lastUpdated: inMemoryStore.lastUpdated,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 7. Store Settings (Branch Name & Brand)
+app.get('/api/store-settings', (_req, res) => {
+  return res.json({
+    success: true,
+    storeSettings: inMemoryStore.storeSettings,
+  });
+});
+
+app.post('/api/store-settings', (req, res) => {
+  try {
+    const { storeName, brand, costRatio } = req.body;
+    if (storeName) inMemoryStore.storeSettings.storeName = String(storeName).trim();
+    if (brand) inMemoryStore.storeSettings.brand = brand;
+    if (costRatio) inMemoryStore.storeSettings.costRatio = Number(costRatio);
+    persistDataStore();
+
+    return res.json({
+      success: true,
+      storeSettings: inMemoryStore.storeSettings,
+      version: inMemoryStore.version,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Mount Vite or static server

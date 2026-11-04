@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import { Scan, Download, Search, RotateCcw } from 'lucide-react';
+import { Scan, Download, Search, RotateCcw, RefreshCw, CheckCircle2, Smartphone, Laptop } from 'lucide-react';
 import { WasteItem } from './types/waste';
 import {
   loadWasteItems,
@@ -9,6 +9,13 @@ import {
   saveStoreSettings,
   exportWasteToCSV,
   StoreSettings,
+  fetchWasteItemsFromServer,
+  addWasteItemServer,
+  updateWasteItemServer,
+  deleteWasteItemServer,
+  syncLocalWasteItemsToServer,
+  resetWasteItemsServer,
+  saveStoreSettingsServer,
 } from './utils/storage';
 import { generateSeedData } from './data/seedData';
 import { MonthlyCalendar } from './components/MonthlyCalendar';
@@ -36,6 +43,11 @@ export default function App() {
   const [isEditingStore, setIsEditingStore] = useState(false);
   const [storeNameInput, setStoreNameInput] = useState(storeSettings.storeName);
 
+  // Cross-device sync status
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncText, setLastSyncText] = useState('실시간 연결됨');
+  const serverVersionRef = useRef<number>(0);
+
   // Clean up any lingering dark mode class on mount
   useEffect(() => {
     document.documentElement.classList.remove('dark');
@@ -44,28 +56,101 @@ export default function App() {
     } catch (e) {}
   }, []);
 
-  // Load items on mount
-  useEffect(() => {
-    const loaded = loadWasteItems();
-    setWasteItems(loaded);
-  }, []);
+  // Fetch / Sync with server
+  const triggerSync = useCallback(async (isInitial = false) => {
+    try {
+      setIsSyncing(true);
+      if (isInitial) {
+        // Initial load: Merge any local items that may have been created on this device
+        const cached = loadWasteItems();
+        const result = await syncLocalWasteItemsToServer(cached);
+        if (result && Array.isArray(result.items)) {
+          setWasteItems(result.items);
+          serverVersionRef.current = result.version;
+          if (result.storeSettings) {
+            setStoreSettings(result.storeSettings);
+            setStoreNameInput(result.storeSettings.storeName);
+          }
+        } else {
+          setWasteItems(cached);
+        }
+      } else {
+        // Periodic check
+        const result = await fetchWasteItemsFromServer();
+        if (result && Array.isArray(result.items)) {
+          // If server version increased or items changed, update
+          if (result.version !== serverVersionRef.current || result.items.length !== wasteItems.length) {
+            setWasteItems(result.items);
+            serverVersionRef.current = result.version;
+            if (result.storeSettings) {
+              setStoreSettings(result.storeSettings);
+            }
+          }
+        }
+      }
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+      setLastSyncText(`${timeStr} 동기화`);
+    } catch (err) {
+      console.warn('Sync tick error:', err);
+      setLastSyncText('오프라인 저장 중');
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [wasteItems.length]);
 
-  // Save items on change
-  const handleUpdateItems = (newItems: WasteItem[]) => {
-    setWasteItems(newItems);
-    saveWasteItems(newItems);
-  };
+  // Initial mount sync + load
+  useEffect(() => {
+    // 1. Instant local render
+    const cached = loadWasteItems();
+    setWasteItems(cached);
+
+    // 2. Initial cloud server merge
+    triggerSync(true);
+
+    // 3. Periodic real-time poll every 4 seconds to sync mobile and PC seamlessly
+    const interval = setInterval(() => {
+      triggerSync(false);
+    }, 4000);
+
+    // 4. Also immediately sync when window gains focus (e.g. user toggles phone/PC tab)
+    const handleFocus = () => {
+      triggerSync(false);
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [triggerSync]);
 
   // Add new waste item
-  const handleSaveWasteItem = (itemData: Omit<WasteItem, 'id' | 'registeredAt'>) => {
+  const handleSaveWasteItem = async (itemData: Omit<WasteItem, 'id' | 'registeredAt'>) => {
     const newItem: WasteItem = {
       ...itemData,
       id: `waste-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       registeredAt: new Date().toISOString(),
     };
 
+    // Optimistic local update
     const updated = [newItem, ...wasteItems];
-    handleUpdateItems(updated);
+    setWasteItems(updated);
+    saveWasteItems(updated);
+
+    // Server push for cross-device sync
+    try {
+      setIsSyncing(true);
+      await addWasteItemServer(newItem);
+      const now = new Date();
+      setLastSyncText(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} 동기화 완료`);
+    } catch (err) {
+      console.error('Failed to sync new item to server:', err);
+    } finally {
+      setIsSyncing(false);
+    }
 
     // Subtle celebration feedback
     try {
@@ -80,15 +165,32 @@ export default function App() {
   };
 
   // Delete item
-  const handleDeleteItem = (id: string) => {
+  const handleDeleteItem = async (id: string) => {
     const updated = wasteItems.filter((i) => i.id !== id);
-    handleUpdateItems(updated);
+    setWasteItems(updated);
+    saveWasteItems(updated);
+
+    try {
+      setIsSyncing(true);
+      await deleteWasteItemServer(id);
+    } catch (err) {
+      console.error('Failed to delete on server:', err);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Update item quantity
-  const handleUpdateQuantity = (id: string, newQty: number) => {
+  const handleUpdateQuantity = async (id: string, newQty: number) => {
     const updated = wasteItems.map((i) => (i.id === id ? { ...i, quantity: newQty } : i));
-    handleUpdateItems(updated);
+    setWasteItems(updated);
+    saveWasteItems(updated);
+
+    try {
+      await updateWasteItemServer(id, { quantity: newQty });
+    } catch (err) {
+      console.error('Failed to update quantity on server:', err);
+    }
   };
 
   // Month navigation
@@ -117,19 +219,31 @@ export default function App() {
   };
 
   // Reset sample data
-  const handleResetSampleData = () => {
-    if (confirm('샘플 폐기 데이터를 복원하시겠습니까? (기존 데이터는 덮어씌워집니다)')) {
-      const sample = generateSeedData();
-      handleUpdateItems(sample);
+  const handleResetSampleData = async () => {
+    if (confirm('샘플 폐기 데이터를 복원하시겠습니까? (PC와 모바일 모두 초기화됩니다)')) {
+      try {
+        setIsSyncing(true);
+        const resetItems = await resetWasteItemsServer();
+        if (resetItems) {
+          setWasteItems(resetItems);
+        } else {
+          const sample = generateSeedData();
+          setWasteItems(sample);
+          saveWasteItems(sample);
+        }
+      } finally {
+        setIsSyncing(false);
+      }
     }
   };
 
   // Save store name
-  const handleSaveStoreName = () => {
+  const handleSaveStoreName = async () => {
     const newSettings = { ...storeSettings, storeName: storeNameInput.trim() || '우리편의점' };
     setStoreSettings(newSettings);
     saveStoreSettings(newSettings);
     setIsEditingStore(false);
+    await saveStoreSettingsServer(newSettings);
   };
 
   // Filter items based purely on product name or barcode search
@@ -188,16 +302,42 @@ export default function App() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+              <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5 flex-wrap">
                 <span>CU봉암공단점 폐기 등록 및 현황 관리</span>
                 <span aria-hidden="true">·</span>
-                <span>바코드 사진 스캔 자동 입력</span>
+                <span className="text-emerald-700 font-medium flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600 inline" />
+                  {lastSyncText}
+                </span>
               </div>
             </div>
           </div>
 
           {/* Quick Actions */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Real-time Cross-Device Sync Indicator */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-emerald-50/90 text-emerald-800 border border-emerald-200/90 rounded-lg shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="font-semibold text-[11px] flex items-center gap-1">
+                <Smartphone className="w-3.5 h-3.5 text-emerald-700" />
+                <span className="text-emerald-500 font-bold">↔</span>
+                <Laptop className="w-3.5 h-3.5 text-emerald-700" />
+                <span>모바일/PC 실시간 동기화</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => triggerSync(false)}
+                disabled={isSyncing}
+                title="지금 즉시 서버와 데이터 동기화"
+                className="ml-1 p-1 text-emerald-700 hover:text-emerald-950 hover:bg-emerald-100 rounded transition-colors cursor-pointer"
+              >
+                <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-emerald-800' : ''}`} />
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={() => {
