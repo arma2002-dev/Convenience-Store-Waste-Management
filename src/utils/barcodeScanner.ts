@@ -103,12 +103,20 @@ export async function scanBarcodeWithAI(
   return result.data;
 }
 
-// Query Barcode Product Info from Public Data Portal / Food Safety Open API / Preset Database
-export async function lookupBarcodeFromPublicAPI(barcode: string): Promise<{
+// Query Barcode Product Info from Public Data Portal (HACCP V3) / Food Safety Open API / Preset Database
+export async function lookupBarcodeFromPublicAPI(
+  barcode: string,
+  serviceKey?: string
+): Promise<{
   productName: string;
   category: any;
   sourceName?: string;
   manufacturer?: string;
+  photoUrl?: string;
+  rawmtrl?: string;
+  nutrient?: string;
+  capacity?: string;
+  prdlstReportNo?: string;
 } | null> {
   const clean = barcode.replace(/[^0-9]/g, '');
   if (!clean) return null;
@@ -123,9 +131,15 @@ export async function lookupBarcodeFromPublicAPI(barcode: string): Promise<{
     };
   }
 
-  // 2. Query Server Public Data Portal / Food Safety Open API endpoint
+  // 2. Query Server Public Data Portal (HACCP V3 JSON+XML) / Food Safety Open API endpoint
   try {
-    const res = await fetch(`/api/lookup-barcode?barcode=${encodeURIComponent(clean)}`);
+    const keyToUse = serviceKey || (typeof window !== 'undefined' ? localStorage.getItem('haccp_service_key') || '' : '');
+    const queryParams = new URLSearchParams({ barcode: clean });
+    if (keyToUse) {
+      queryParams.set('serviceKey', keyToUse);
+    }
+
+    const res = await fetch(`/api/lookup-barcode?${queryParams.toString()}`);
     if (res.ok) {
       const result = await res.json();
       if (
@@ -137,8 +151,13 @@ export async function lookupBarcodeFromPublicAPI(barcode: string): Promise<{
         return {
           productName: result.data.productName,
           category: result.data.category || '기타',
-          sourceName: result.sourceName || '공공데이터포털(data.go.kr) 유통바코드 API',
+          sourceName: result.sourceName || 'HACCP 제품이미지 및 포장지표기정보(V3)',
           manufacturer: result.data.manufacturer,
+          photoUrl: result.data.photoUrl,
+          rawmtrl: result.data.rawmtrl,
+          nutrient: result.data.nutrient,
+          capacity: result.data.capacity,
+          prdlstReportNo: result.data.prdlstReportNo,
         };
       }
     }

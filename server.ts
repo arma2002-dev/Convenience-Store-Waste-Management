@@ -153,8 +153,11 @@ const KOREA_POPULAR_BARCODES: Record<string, { productName: string; category: st
   '8801123111050': { productName: '롯데 몽쉘 크림케이크 6입', category: '디저트/베이커리', manufacturer: '롯데웰푸드' },
   '8801155111017': { productName: '해태 허니버터칩 60g', category: '디저트/베이커리', manufacturer: '해태제과' },
   '8801155111024': { productName: '해태 맛동산 90g', category: '디저트/베이커리', manufacturer: '해태제과' },
-  '8801155111031': { productName: '해태 홈런볼 초코 46g', category: '디저트/베이커리', manufacturer: '해태제과' },
   '8801062012700': { productName: '크라운 콘칩 70g', category: '디저트/베이커리', manufacturer: '크라운제과' },
+  '8804973304835': { productName: '이클립스 피치향 캔디 34g', category: '디저트/베이커리', manufacturer: '한국마즈' },
+  '8804973304811': { productName: '이클립스 페퍼민트향 캔디 34g', category: '디저트/베이커리', manufacturer: '한국마즈' },
+  '8804973304828': { productName: '이클립스 스피어민트향 캔디 34g', category: '디저트/베이커리', manufacturer: '한국마즈' },
+  '8804973304842': { productName: '이클립스 스트로베리향 캔디 34g', category: '디저트/베이커리', manufacturer: '한국마즈' },
   // 조리/튀김
   '8809112233445': { productName: '바삭 통다리 치킨', category: '조리/튀김', manufacturer: '편의점 즉석조리' },
   '8809112233452': { productName: '매콤 넓적다리 치킨', category: '조리/튀김', manufacturer: '편의점 즉석조리' },
@@ -443,13 +446,209 @@ async function fetchOpenFoodFacts(barcode: string) {
   return null;
 }
 
-// API: Barcode lookup leveraging Public Data Portal (data.go.kr) & Food Safety Open APIs
+// Function to query HACCP 제품이미지 및 포장지표기정보 조회 (data.go.kr)
+// End Point: https://apis.data.go.kr/B553748/CertImgListServiceV3
+async function fetchHaccpCertImgListServiceV3(barcode: string, customKey?: string) {
+  const serviceKey =
+    customKey ||
+    process.env.HACCP_API_KEY ||
+    process.env.PUBLIC_DATA_API_KEY ||
+    process.env.DATA_GO_KR_KEY;
+  if (!serviceKey) return null;
+
+  const clean = barcode.replace(/[^0-9]/g, '');
+  if (!clean) return null;
+
+  // Key handling: If serviceKey already has % escape sequences, don't double encode
+  const formattedKey = serviceKey.includes('%') ? serviceKey : encodeURIComponent(serviceKey);
+
+  // 1. Try V3 endpoint with returnType=json
+  const urlV3Json = `https://apis.data.go.kr/B553748/CertImgListServiceV3/getCertImgListServiceV3?serviceKey=${formattedKey}&barcode=${encodeURIComponent(
+    clean
+  )}&returnType=json&pageNo=1&numOfRows=10`;
+
+  try {
+    const response = await fetch(urlV3Json, { signal: AbortSignal.timeout(3500) });
+    const text = await response.text();
+
+    // Check if JSON format
+    if (text.trim().startsWith('{')) {
+      try {
+        const json = JSON.parse(text);
+        const body = json?.body || json?.response?.body;
+        const items = body?.items;
+        let item: any = null;
+        if (Array.isArray(items)) {
+          item = items[0]?.item || items[0];
+        } else if (items?.item) {
+          item = Array.isArray(items.item) ? items.item[0] : items.item;
+        }
+
+        if (item && (item.prdlstNm || item.PRDLST_NM)) {
+          const prdName = String(item.prdlstNm || item.PRDLST_NM).trim();
+          const kind = String(item.prdkind || item.PRDKIND || item.clsfNm || '').trim();
+          const company = String(item.bsshNm || item.BSSH_NM || '').trim();
+          const img1 = item.imgurl1 || item.IMGURL1 || '';
+          const img2 = item.imgurl2 || item.IMGURL2 || '';
+          const photo = img1 || img2 || undefined;
+
+          return {
+            productName: prdName,
+            category: mapCategoryFromFoodType(kind || prdName),
+            manufacturer: company,
+            photoUrl: photo,
+            rawmtrl: item.rawmtrl || '',
+            nutrient: item.nutrient || '',
+            capacity: item.capacity || '',
+            prdlstReportNo: item.prdlstReportNo || '',
+            sourceName: 'HACCP 제품이미지 및 포장지표기정보(V3)',
+          };
+        }
+      } catch (parseErr) {
+        // Fall back to XML parsing
+      }
+    }
+
+    // 2. Parse XML format (either when returned as XML or if returnType wasn't honored)
+    if (text.includes('<prdlstNm>') || text.includes('<PRDLST_NM>')) {
+      const getTag = (tag: string): string => {
+        const m = text.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+        return m ? m[1].replace(/<!\[CDATA\[(.*?)\]\]>/gi, '$1').trim() : '';
+      };
+      const prdName = getTag('prdlstNm') || getTag('PRDLST_NM');
+      if (prdName) {
+        const kind = getTag('prdkind') || getTag('PRDKIND') || getTag('clsfNm');
+        const company = getTag('bsshNm') || getTag('BSSH_NM');
+        const img1 = getTag('imgurl1') || getTag('IMGURL1');
+        const img2 = getTag('imgurl2') || getTag('IMGURL2');
+        const photo = img1 || img2 || undefined;
+
+        return {
+          productName: prdName,
+          category: mapCategoryFromFoodType(kind || prdName),
+          manufacturer: company,
+          photoUrl: photo,
+          rawmtrl: getTag('rawmtrl'),
+          nutrient: getTag('nutrient'),
+          capacity: getTag('capacity'),
+          prdlstReportNo: getTag('prdlstReportNo'),
+          sourceName: 'HACCP 제품이미지 및 포장지표기정보(V3 XML)',
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('HACCP V3 API query error:', err);
+  }
+
+  // 3. Fallback to older HACCP endpoint if V3 returns empty
+  try {
+    const urlLegacy = `https://apis.data.go.kr/B553748/certImgListService/getCertImgListService?serviceKey=${formattedKey}&barcode=${encodeURIComponent(
+      clean
+    )}&returnType=json`;
+    const response = await fetch(urlLegacy, { signal: AbortSignal.timeout(3000) });
+    if (response.ok) {
+      const text = await response.text();
+      if (text.trim().startsWith('{')) {
+        const json = JSON.parse(text);
+        const items = json?.body?.items || json?.response?.body?.items;
+        let item: any = null;
+        if (Array.isArray(items)) {
+          item = items[0]?.item || items[0];
+        } else if (items?.item) {
+          item = Array.isArray(items.item) ? items.item[0] : items.item;
+        }
+
+        if (item && (item.prdlstNm || item.PRDLST_NM)) {
+          const prdName = String(item.prdlstNm || item.PRDLST_NM).trim();
+          const kind = String(item.prdkind || item.PRDKIND || item.clsfNm || '').trim();
+          const company = String(item.bsshNm || item.BSSH_NM || '').trim();
+          const photo = item.imgurl1 || item.IMGURL1 || item.imgurl2 || item.IMGURL2 || undefined;
+
+          return {
+            productName: prdName,
+            category: mapCategoryFromFoodType(kind || prdName),
+            manufacturer: company,
+            photoUrl: photo,
+            sourceName: 'HACCP 제품이미지 공공데이터',
+          };
+        }
+      }
+    }
+  } catch (err) {
+    // Ignore legacy fallback error
+  }
+
+  return null;
+}
+
+// Health check / verification endpoint for HACCP API key
+app.get('/api/haccp/test-connection', async (req, res) => {
+  const serviceKey =
+    (req.query.serviceKey as string) ||
+    process.env.HACCP_API_KEY ||
+    process.env.PUBLIC_DATA_API_KEY ||
+    process.env.DATA_GO_KR_KEY ||
+    '';
+
+  if (!serviceKey) {
+    return res.json({
+      configured: false,
+      message: '공공데이터포털(data.go.kr) 일반 인증키(ServiceKey)가 설정되지 않았습니다.',
+    });
+  }
+
+  const formattedKey = serviceKey.includes('%') ? serviceKey : encodeURIComponent(serviceKey);
+  const testUrl = `https://apis.data.go.kr/B553748/CertImgListServiceV3/getCertImgListServiceV3?serviceKey=${formattedKey}&pageNo=1&numOfRows=1&returnType=json`;
+
+  try {
+    const response = await fetch(testUrl, { signal: AbortSignal.timeout(4000) });
+    const text = await response.text();
+
+    if (text.includes('SERVICE_KEY_IS_NOT_REGISTERED_ERROR')) {
+      return res.json({
+        configured: true,
+        valid: false,
+        message: '등록되지 않은 인증키이거나 승인 대기 중인 키입니다.',
+      });
+    }
+
+    if (text.includes('SERVICE_KEY_IS_NULL') || text.includes('서비스 접근거부')) {
+      return res.json({
+        configured: true,
+        valid: false,
+        message: '인증키가 유효하지 않거나 접근이 거부되었습니다.',
+      });
+    }
+
+    return res.json({
+      configured: true,
+      valid: true,
+      message: 'HACCP 제품이미지 및 포장지표기정보(V3) API와 정상 연결되었습니다.',
+      endpoint: 'https://apis.data.go.kr/B553748/CertImgListServiceV3',
+    });
+  } catch (err: any) {
+    return res.json({
+      configured: true,
+      valid: false,
+      message: 'API 연결 시간 초과 또는 네트워크 오류: ' + (err?.message || ''),
+    });
+  }
+});
+
+// API: Barcode lookup leveraging HACCP V3, Public Data Portal & Food Safety Open APIs
 app.all('/api/lookup-barcode', async (req, res) => {
   const barcode = (
     (req.query.barcode as string) ||
     (req.body?.barcode as string) ||
     ''
   ).trim();
+  const customServiceKey = (
+    (req.query.serviceKey as string) ||
+    (req.body?.serviceKey as string) ||
+    (req.headers['x-haccp-service-key'] as string) ||
+    ''
+  ).trim();
+
   if (!barcode) {
     return res.status(400).json({ error: '바코드 번호가 필요합니다.' });
   }
@@ -490,7 +689,29 @@ app.all('/api/lookup-barcode', async (req, res) => {
     });
   }
 
-  // 2. Query Food Safety Korea open API (식품안전나라 I2570 바코드 연계)
+  // 2. Query HACCP 제품이미지 및 포장지표기정보 조회 (V3 JSON+XML)
+  const haccpResult = await fetchHaccpCertImgListServiceV3(clean, customServiceKey);
+  if (haccpResult && haccpResult.productName) {
+    return res.json({
+      success: true,
+      found: true,
+      source: 'haccp_v3',
+      sourceName: haccpResult.sourceName || 'HACCP 제품이미지 및 포장지표기정보(V3)',
+      data: {
+        barcode: clean,
+        productName: haccpResult.productName,
+        category: haccpResult.category,
+        manufacturer: haccpResult.manufacturer,
+        photoUrl: haccpResult.photoUrl,
+        rawmtrl: haccpResult.rawmtrl,
+        nutrient: haccpResult.nutrient,
+        capacity: haccpResult.capacity,
+        prdlstReportNo: haccpResult.prdlstReportNo,
+      },
+    });
+  }
+
+  // 3. Query Food Safety Korea open API (식품안전나라 I2570 바코드 연계)
   const foodSafetyResult = await fetchFoodSafetyKorea(clean);
   if (foodSafetyResult && foodSafetyResult.productName) {
     return res.json({
@@ -507,7 +728,7 @@ app.all('/api/lookup-barcode', async (req, res) => {
     });
   }
 
-  // 3. Query Open Food Facts open API
+  // 4. Query Open Food Facts open API
   const openFoodResult = await fetchOpenFoodFacts(clean);
   if (openFoodResult && openFoodResult.productName) {
     return res.json({
@@ -522,44 +743,6 @@ app.all('/api/lookup-barcode', async (req, res) => {
         manufacturer: openFoodResult.manufacturer,
       },
     });
-  }
-
-  // 4. Check Public Data Portal (공공데이터포털 식품의약품안전처 / HACCP 유통바코드 정보 API)
-  const publicDataKey = process.env.PUBLIC_DATA_API_KEY;
-  if (publicDataKey) {
-    try {
-      const url = `https://apis.data.go.kr/B553748/certImgListService/getCertImgListService?serviceKey=${encodeURIComponent(
-        publicDataKey
-      )}&barcode=${encodeURIComponent(clean)}&returnType=json`;
-
-      const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
-      if (response.ok) {
-        const json: any = await response.json();
-        const items = json?.body?.items || json?.response?.body?.items?.item;
-        const item = Array.isArray(items) ? items[0] : items?.item || items;
-
-        if (item && (item.prdlstNm || item.PRDLST_NM)) {
-          const prdName = item.prdlstNm || item.PRDLST_NM;
-          const kind = item.prdkind || item.PRDKIND || item.clsfNm || prdName;
-          const company = item.bsshNm || item.BSSH_NM || '';
-
-          return res.json({
-            success: true,
-            found: true,
-            source: 'data_go_kr',
-            sourceName: '공공데이터포털(data.go.kr) 유통바코드 API',
-            data: {
-              barcode: clean,
-              productName: prdName,
-              category: mapCategoryFromFoodType(kind),
-              manufacturer: company,
-            },
-          });
-        }
-      }
-    } catch (apiErr) {
-      console.warn('Public data portal request error:', apiErr);
-    }
   }
 
   // 5. Query Gemini AI Barcode Knowledge Base (if API key present)

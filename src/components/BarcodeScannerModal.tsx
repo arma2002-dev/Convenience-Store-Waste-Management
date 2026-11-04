@@ -10,6 +10,10 @@ import {
   Plus,
   Minus,
   RefreshCw,
+  Key,
+  ShieldCheck,
+  Settings2,
+  ExternalLink,
 } from 'lucide-react';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { WasteItem, WasteCategory, DisposalReason } from '../types/waste';
@@ -86,6 +90,53 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   const [isLookingUpBarcode, setIsLookingUpBarcode] = useState(false);
 
+  // HACCP API key settings state
+  const [showHaccpSettings, setShowHaccpSettings] = useState(false);
+  const [haccpKeyInput, setHaccpKeyInput] = useState<string>(() => {
+    return typeof window !== 'undefined' ? localStorage.getItem('haccp_service_key') || '' : '';
+  });
+  const [haccpTestStatus, setHaccpTestStatus] = useState<{
+    loading: boolean;
+    valid?: boolean;
+    message?: string;
+  } | null>(null);
+
+  // Test HACCP V3 connection
+  const handleTestHaccpConnection = async () => {
+    setHaccpTestStatus({ loading: true });
+    try {
+      const res = await fetch(
+        `/api/haccp/test-connection?serviceKey=${encodeURIComponent(haccpKeyInput.trim())}`
+      );
+      const data = await res.json();
+      setHaccpTestStatus({
+        loading: false,
+        valid: data.valid,
+        message: data.message,
+      });
+      if (data.valid && haccpKeyInput.trim()) {
+        localStorage.setItem('haccp_service_key', haccpKeyInput.trim());
+      }
+    } catch (e: any) {
+      setHaccpTestStatus({
+        loading: false,
+        valid: false,
+        message: '연결 실패: ' + (e?.message || ''),
+      });
+    }
+  };
+
+  // Save HACCP Service Key locally
+  const handleSaveHaccpKey = () => {
+    if (haccpKeyInput.trim()) {
+      localStorage.setItem('haccp_service_key', haccpKeyInput.trim());
+      setScanSuccessMessage('HACCP V3 API 인증키가 브라우저에 저장되었습니다.');
+    } else {
+      localStorage.removeItem('haccp_service_key');
+      setScanSuccessMessage('HACCP 인증키가 초기화되었습니다. 기본 유통 DB로 조회됩니다.');
+    }
+  };
+
   // Query product data from Public Data Portal / Food Safety Open API / Preset Database
   const fetchBarcodePublicInfo = async (code: string) => {
     const clean = code.replace(/[\s-]/g, '');
@@ -102,16 +153,21 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
 
     setIsLookingUpBarcode(true);
-    setScanSuccessMessage('공공데이터 유통 바코드 조회 중...');
+    setScanSuccessMessage('HACCP(V3) 및 유통 공공데이터 조회 중...');
     try {
-      const info = await lookupBarcodeFromPublicAPI(clean);
+      const info = await lookupBarcodeFromPublicAPI(clean, haccpKeyInput.trim());
       if (info && info.productName && !info.productName.includes('한국 유통상품')) {
         setProductName(info.productName);
         if (info.category) {
           setCategory(info.category);
         }
+        if (info.photoUrl) {
+          setProductPhoto(info.photoUrl);
+        }
         setScanSuccessMessage(
-          `[${info.sourceName || '공공 유통데이터'}] "${info.productName}" 자동 조회 완료!`
+          `[${info.sourceName || 'HACCP 공공데이터'}] "${info.productName}"${
+            info.photoUrl ? ' 및 제품 포장지 사진' : ''
+          } 자동 조회 완료!`
         );
         playSuccessChime();
       } else {
@@ -305,15 +361,18 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
 
     // 2. Fetch from public API / server catalog
-    setScanSuccessMessage(`${successMsg} (바코드: ${clean}) - 유통 공공데이터 상품명 조회 중...`);
+    setScanSuccessMessage(`${successMsg} (바코드: ${clean}) - HACCP V3 공공데이터 조회 중...`);
     setIsLookingUpBarcode(true);
     try {
-      const info = await lookupBarcodeFromPublicAPI(clean);
+      const info = await lookupBarcodeFromPublicAPI(clean, haccpKeyInput.trim());
       if (info && info.productName && !info.productName.includes('한국 유통상품')) {
         setProductName(info.productName);
         if (info.category) setCategory(info.category);
+        if (info.photoUrl) setProductPhoto(info.photoUrl);
         setScanSuccessMessage(
-          `[${info.sourceName || '공공 유통데이터'}] "${info.productName}" 자동 기입 완료!`
+          `[${info.sourceName || 'HACCP 공공데이터'}] "${info.productName}"${
+            info.photoUrl ? ' 및 포장지 사진' : ''
+          } 자동 기입 완료!`
         );
         playSuccessChime();
       } else {
@@ -487,12 +546,18 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 flex-wrap">
               <Scan className="w-5 h-5 text-purple-700" />
               편의점 폐기 상품 등록
-              <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
-                공공데이터 유통바코드 API 연동
-              </span>
+              <button
+                type="button"
+                onClick={() => setShowHaccpSettings(!showHaccpSettings)}
+                className="text-[10px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-full flex items-center gap-1 cursor-pointer transition-colors"
+                title="HACCP 제품이미지 및 포장지표기정보(V3) API 설정"
+              >
+                <Key className="w-3 h-3 text-purple-600" />
+                HACCP V3 API 연동
+              </button>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              공공데이터포털 유통바코드 정보 Open API & 실시간 바코드 스캔으로 상품 자동 등록
+              HACCP 제품이미지 및 포장지표기정보 조회 (V3 JSON+XML) & 바코드 스캔으로 자동 등록
             </p>
           </div>
           <button
@@ -627,6 +692,89 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
           {/* Registration Form Fields */}
           <form onSubmit={handleSubmit} id="waste-form" className="space-y-4 pt-2 border-t border-slate-200">
+            {/* HACCP V3 API Settings Accordion */}
+            {showHaccpSettings && (
+              <div className="p-3.5 bg-purple-50/80 border border-purple-200 rounded-xl space-y-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-purple-950 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-purple-700" />
+                    HACCP 제품이미지 및 포장지표기정보 조회 API (V3)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowHaccpSettings(false)}
+                    className="text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="text-[11px] text-slate-600 space-y-0.5 bg-white/70 p-2 rounded-lg border border-purple-100">
+                  <div>
+                    <span className="font-semibold text-slate-700">End Point:</span>{' '}
+                    <span className="font-mono text-purple-800 break-all">
+                      https://apis.data.go.kr/B553748/CertImgListServiceV3
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-700">데이터포맷:</span>{' '}
+                    <span className="text-slate-800 font-medium">JSON + XML 자동 인식</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-purple-950 mb-1">
+                    공공데이터포털(data.go.kr) 일반 인증키 (ServiceKey):
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={haccpKeyInput}
+                      onChange={(e) => setHaccpKeyInput(e.target.value)}
+                      placeholder="공공데이터포털 ServiceKey 입력 (선택)"
+                      className="flex-1 px-2.5 py-1.5 text-xs font-mono bg-white border border-purple-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 text-slate-900 placeholder:text-slate-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleTestHaccpConnection}
+                      disabled={haccpTestStatus?.loading || !haccpKeyInput.trim()}
+                      className="px-2.5 py-1.5 bg-white border border-purple-300 hover:bg-purple-100/70 text-purple-800 font-medium rounded-lg transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50 shrink-0 text-xs shadow-2xs"
+                    >
+                      {haccpTestStatus?.loading ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                      )}
+                      <span>연결 확인</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveHaccpKey}
+                      className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-medium rounded-lg transition-colors cursor-pointer shrink-0 text-xs shadow-2xs"
+                    >
+                      저장
+                    </button>
+                  </div>
+                </div>
+
+                {haccpTestStatus && !haccpTestStatus.loading && (
+                  <div
+                    className={`p-2 rounded-lg text-[11px] font-medium flex items-center gap-1.5 ${
+                      haccpTestStatus.valid
+                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                        : 'bg-rose-50 text-rose-800 border border-rose-200'
+                    }`}
+                  >
+                    {haccpTestStatus.valid ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                    )}
+                    <span>{haccpTestStatus.message}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Barcode and Product Name */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -634,9 +782,15 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   <label className="block text-xs font-semibold text-slate-700">
                     바코드 번호 (880...)
                   </label>
-                  <span className="text-[11px] text-purple-700 font-medium">
-                    공공데이터포털(data.go.kr)
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowHaccpSettings(!showHaccpSettings)}
+                    className="text-[11px] text-purple-700 hover:text-purple-900 font-medium flex items-center gap-1 cursor-pointer"
+                    title="HACCP V3 API 설정"
+                  >
+                    <Key className="w-3 h-3 text-purple-600" />
+                    HACCP(V3) API
+                  </button>
                 </div>
                 <div className="flex gap-1.5">
                   <div className="relative flex-1">
@@ -672,7 +826,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     onClick={() => fetchBarcodePublicInfo(barcode)}
                     disabled={isLookingUpBarcode || !barcode.trim()}
                     className="px-3 py-2 text-xs font-semibold bg-purple-700 hover:bg-purple-800 disabled:bg-slate-100 text-white disabled:text-slate-400 rounded-lg transition-all flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer disabled:cursor-not-allowed"
-                    title="공공데이터포털 유통바코드 정보 조회"
+                    title="HACCP 제품이미지 및 포장지표기정보 V3 조회"
                   >
                     {isLookingUpBarcode ? (
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
