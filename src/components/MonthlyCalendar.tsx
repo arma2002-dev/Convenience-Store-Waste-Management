@@ -35,21 +35,6 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const prevMonthLastDate = new Date(year, month, 0).getDate();
 
-  // Filter waste items for this month
-  const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
-  const monthItems = wasteItems.filter((item) => item.date.startsWith(monthPrefix));
-
-  // Compute month summary stats
-  const totalQuantity = monthItems.reduce((acc, cur) => acc + cur.quantity, 0);
-
-  // Group items by category to find top wasted category
-  const categoryCount: Record<string, number> = {};
-  monthItems.forEach((item) => {
-    categoryCount[item.category] = (categoryCount[item.category] || 0) + item.quantity;
-  });
-  const topCategory =
-    Object.entries(categoryCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '없음';
-
   // Build grid days
   const calendarCells = [];
 
@@ -105,8 +90,8 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Month Navigation & Metrics Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+      {/* Month Navigation Bar */}
+      <div className="flex items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
         {/* Nav controls */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
@@ -136,32 +121,6 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({
           >
             오늘
           </button>
-        </div>
-
-        {/* Monthly Summary Statistics strip */}
-        <div className="grid grid-cols-3 gap-3 lg:gap-6 border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100">
-          <div>
-            <div className="text-[11px] font-medium text-slate-500">당월 총 폐기 품목</div>
-            <div className="text-base font-bold text-slate-900 tabular-nums">
-              {monthItems.length}
-              <span className="text-xs font-normal text-slate-500 ml-1">건</span>
-            </div>
-          </div>
-
-          <div>
-            <div className="text-[11px] font-medium text-slate-500">당월 총 폐기 수량</div>
-            <div className="text-base font-bold text-purple-700 tabular-nums">
-              {totalQuantity}
-              <span className="text-xs font-normal text-slate-500 ml-1">개</span>
-            </div>
-          </div>
-
-          <div>
-            <div className="text-[11px] font-medium text-slate-500">최다 폐기 카테고리</div>
-            <div className="text-base font-bold text-slate-800 truncate" title={topCategory}>
-              {topCategory}
-            </div>
-          </div>
         </div>
       </div>
 

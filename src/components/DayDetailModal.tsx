@@ -146,10 +146,11 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({
                           {item.productName}
                         </h4>
 
-                        <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
-                          <span>사유: {item.reason}</span>
-                          {item.notes && <span>· {item.notes}</span>}
-                        </div>
+                        {item.notes && (
+                          <div className="text-xs text-slate-500 mt-1">
+                            {item.notes}
+                          </div>
+                        )}
                       </div>
                     </div>
 
