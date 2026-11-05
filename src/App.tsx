@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { Scan, Download, Search, RotateCcw, RefreshCw, CheckCircle2, Smartphone, Laptop, Cloud } from 'lucide-react';
+import { Scan, Download, Search, RotateCcw } from 'lucide-react';
 import { WasteItem } from './types/waste';
 import {
   loadWasteItems,
@@ -45,10 +45,6 @@ export default function App() {
   const [isEditingStore, setIsEditingStore] = useState(false);
   const [storeNameInput, setStoreNameInput] = useState(storeSettings.storeName);
 
-  // Firebase real-time sync status
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncText, setLastSyncText] = useState('Firestore 실시간 연결 중');
-
   // Clean up any lingering dark mode class on mount
   useEffect(() => {
     document.documentElement.classList.remove('dark');
@@ -65,8 +61,6 @@ export default function App() {
       setWasteItems(cachedItems);
     }
 
-    setIsSyncing(true);
-
     // Initial check: Seed Firestore if collection is empty
     ensureInitialDataInFirestore(cachedItems.length > 0 ? cachedItems : generateSeedData()).catch((err) => {
       console.warn('Initial data seeding check:', err);
@@ -78,16 +72,9 @@ export default function App() {
       (liveItems) => {
         setWasteItems(liveItems);
         saveWasteItems(liveItems); // Update local cache
-        setIsSyncing(false);
-
-        const now = new Date();
-        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-        setLastSyncText(`${timeStr} 실시간 동기화됨`);
       },
       (error) => {
         console.error('Firestore real-time subscription error:', error);
-        setIsSyncing(false);
-        setLastSyncText('로컬 캐시 모드');
       }
     );
 
@@ -111,7 +98,6 @@ export default function App() {
 
   // 2. Add new waste item -> Saved to Cloud DB (Firestore)
   const handleSaveWasteItem = async (itemData: Omit<WasteItem, 'id' | 'registeredAt'>) => {
-    setIsSyncing(true);
     try {
       // Direct write to Cloud Firestore
       // All other devices (PC, Mobile) will receive this item immediately via onSnapshot!
@@ -134,21 +120,16 @@ export default function App() {
         registeredAt: new Date().toISOString(),
       };
       setWasteItems((prev) => [fallbackItem, ...prev]);
-    } finally {
-      setIsSyncing(false);
     }
   };
 
   // 3. Delete item -> Deleted from Cloud DB (Firestore)
   const handleDeleteItem = async (id: string) => {
-    setIsSyncing(true);
     try {
       await deleteWasteItemFromFirestore(id);
     } catch (error) {
       console.error('Failed to delete waste item from Firestore:', error);
       setWasteItems((prev) => prev.filter((i) => i.id !== id));
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -190,15 +171,10 @@ export default function App() {
   // Reset sample data
   const handleResetSampleData = async () => {
     if (confirm('샘플 폐기 데이터를 클라우드 DB에 다시 생성하시겠습니까? (모든 기기에 실시간 반영됩니다)')) {
-      try {
-        setIsSyncing(true);
-        const sample = generateSeedData();
-        // Delete existing items and seed fresh ones
-        await Promise.all(wasteItems.map((item) => deleteWasteItemFromFirestore(item.id).catch(() => {})));
-        await ensureInitialDataInFirestore(sample);
-      } finally {
-        setIsSyncing(false);
-      }
+      const sample = generateSeedData();
+      // Delete existing items and seed fresh ones
+      await Promise.all(wasteItems.map((item) => deleteWasteItemFromFirestore(item.id).catch(() => {})));
+      await ensureInitialDataInFirestore(sample);
     }
   };
 
@@ -270,36 +246,16 @@ export default function App() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5 flex-wrap">
+              <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
                 <span>CU봉암공단점 폐기 등록 및 현황 관리</span>
                 <span aria-hidden="true">·</span>
-                <span className="text-emerald-700 font-medium flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-600 inline" />
-                  {lastSyncText}
-                </span>
+                <span>바코드 사진 스캔 자동 입력</span>
               </div>
             </div>
           </div>
 
           {/* Quick Actions */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Real-time Cross-Device Sync Indicator */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-emerald-50/90 text-emerald-800 border border-emerald-200/90 rounded-lg shadow-2xs">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="font-semibold text-[11px] flex items-center gap-1.5">
-                <Cloud className="w-3.5 h-3.5 text-emerald-600" />
-                <Smartphone className="w-3.5 h-3.5 text-emerald-700" />
-                <span className="text-emerald-500 font-bold">↔</span>
-                <Laptop className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Firestore 실시간 동기화</span>
-              </span>
-              {isSyncing && (
-                <RefreshCw className="w-3 h-3 animate-spin text-emerald-800 ml-1" />
-              )}
-            </div>
 
             <button
               type="button"
