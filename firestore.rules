@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidWasteItem(data) {
+      return data.productName is string && data.productName.size() > 0 && data.productName.size() <= 200
+        && data.quantity is number && data.quantity >= 0 && data.quantity <= 10000
+        && data.date is string && data.date.size() <= 32
+        && (!('barcode' in data) || (data.barcode is string && data.barcode.size() <= 64))
+        && (!('category' in data) || (data.category is string && data.category.size() <= 64))
+        && (!('unitPrice' in data) || (data.unitPrice is number && data.unitPrice >= 0))
+        && (!('costPrice' in data) || (data.costPrice is number && data.costPrice >= 0))
+        && (!('disposalTime' in data) || (data.disposalTime is string && data.disposalTime.size() <= 16))
+        && (!('reason' in data) || (data.reason is string && data.reason.size() <= 128))
+        && (!('storeBrand' in data) || (data.storeBrand is string && data.storeBrand.size() <= 32))
+        && (!('registeredAt' in data) || (data.registeredAt is string && data.registeredAt.size() <= 64))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 500))
+        && (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 2000000));
+    }
+
+    function isValidStoreSettings(data) {
+      return data.storeName is string && data.storeName.size() > 0 && data.storeName.size() <= 100
+        && (!('brand' in data) || (data.brand is string && data.brand.size() <= 32))
+        && (!('costRatio' in data) || (data.costRatio is number && data.costRatio >= 0 && data.costRatio <= 1));
+    }
+
+    match /waste_items/{itemId} {
+      allow read: if true;
+      allow create: if isValidId(itemId) && isValidWasteItem(incoming());
+      allow update: if isValidId(itemId) && isValidWasteItem(incoming());
+      allow delete: if isValidId(itemId);
+    }
+
+    match /store_settings/{settingId} {
+      allow read: if true;
+      allow create, update: if isValidId(settingId) && isValidStoreSettings(incoming());
+      allow delete: if false;
+    }
+  }
+}

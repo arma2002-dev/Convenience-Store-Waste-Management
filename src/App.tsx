@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { Scan, Download, Search, RotateCcw, RefreshCw, CheckCircle2, Smartphone, Laptop } from 'lucide-react';
+import { Scan, Download, Search, RotateCcw, RefreshCw, CheckCircle2, Smartphone, Laptop, Cloud } from 'lucide-react';
 import { WasteItem } from './types/waste';
 import {
   loadWasteItems,
@@ -9,18 +9,20 @@ import {
   saveStoreSettings,
   exportWasteToCSV,
   StoreSettings,
-  fetchWasteItemsFromServer,
-  addWasteItemServer,
-  updateWasteItemServer,
-  deleteWasteItemServer,
-  syncLocalWasteItemsToServer,
-  resetWasteItemsServer,
-  saveStoreSettingsServer,
 } from './utils/storage';
 import { generateSeedData } from './data/seedData';
 import { MonthlyCalendar } from './components/MonthlyCalendar';
 import { BarcodeScannerModal } from './components/BarcodeScannerModal';
 import { DayDetailModal } from './components/DayDetailModal';
+import {
+  subscribeToWasteItems,
+  addWasteItemToFirestore,
+  updateWasteItemInFirestore,
+  deleteWasteItemFromFirestore,
+  subscribeToStoreSettings,
+  saveStoreSettingsToFirestore,
+  ensureInitialDataInFirestore,
+} from './firebase/firestoreService';
 
 export default function App() {
   const [wasteItems, setWasteItems] = useState<WasteItem[]>([]);
@@ -43,10 +45,9 @@ export default function App() {
   const [isEditingStore, setIsEditingStore] = useState(false);
   const [storeNameInput, setStoreNameInput] = useState(storeSettings.storeName);
 
-  // Cross-device sync status
+  // Firebase real-time sync status
   const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncText, setLastSyncText] = useState('실시간 연결됨');
-  const serverVersionRef = useRef<number>(0);
+  const [lastSyncText, setLastSyncText] = useState('Firestore 실시간 연결 중');
 
   // Clean up any lingering dark mode class on mount
   useEffect(() => {
@@ -56,140 +57,108 @@ export default function App() {
     } catch (e) {}
   }, []);
 
-  // Fetch / Sync with server
-  const triggerSync = useCallback(async (isInitial = false) => {
-    try {
-      setIsSyncing(true);
-      if (isInitial) {
-        // Initial load: Merge any local items that may have been created on this device
-        const cached = loadWasteItems();
-        const result = await syncLocalWasteItemsToServer(cached);
-        if (result && Array.isArray(result.items)) {
-          setWasteItems(result.items);
-          serverVersionRef.current = result.version;
-          if (result.storeSettings) {
-            setStoreSettings(result.storeSettings);
-            setStoreNameInput(result.storeSettings.storeName);
-          }
-        } else {
-          setWasteItems(cached);
-        }
-      } else {
-        // Periodic check
-        const result = await fetchWasteItemsFromServer();
-        if (result && Array.isArray(result.items)) {
-          // If server version increased or items changed, update
-          if (result.version !== serverVersionRef.current || result.items.length !== wasteItems.length) {
-            setWasteItems(result.items);
-            serverVersionRef.current = result.version;
-            if (result.storeSettings) {
-              setStoreSettings(result.storeSettings);
-            }
-          }
-        }
-      }
-      const now = new Date();
-      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-      setLastSyncText(`${timeStr} 동기화`);
-    } catch (err) {
-      console.warn('Sync tick error:', err);
-      setLastSyncText('오프라인 저장 중');
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [wasteItems.length]);
-
-  // Initial mount sync + load
+  // 1. Mount Firebase Firestore Real-Time Listeners (onSnapshot)
   useEffect(() => {
-    // 1. Instant local render
-    const cached = loadWasteItems();
-    setWasteItems(cached);
+    // Immediate local cache render for instantaneous initial UI
+    const cachedItems = loadWasteItems();
+    if (cachedItems.length > 0) {
+      setWasteItems(cachedItems);
+    }
 
-    // 2. Initial cloud server merge
-    triggerSync(true);
+    setIsSyncing(true);
 
-    // 3. Periodic real-time poll every 4 seconds to sync mobile and PC seamlessly
-    const interval = setInterval(() => {
-      triggerSync(false);
-    }, 4000);
+    // Initial check: Seed Firestore if collection is empty
+    ensureInitialDataInFirestore(cachedItems.length > 0 ? cachedItems : generateSeedData()).catch((err) => {
+      console.warn('Initial data seeding check:', err);
+    });
 
-    // 4. Also immediately sync when window gains focus (e.g. user toggles phone/PC tab)
-    const handleFocus = () => {
-      triggerSync(false);
-    };
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleFocus);
+    // Real-time listener for Waste Items (onSnapshot)
+    // Synchronizes PC and Mobile instantly whenever data is created/updated/deleted
+    const unsubscribeWaste = subscribeToWasteItems(
+      (liveItems) => {
+        setWasteItems(liveItems);
+        saveWasteItems(liveItems); // Update local cache
+        setIsSyncing(false);
+
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+        setLastSyncText(`${timeStr} 실시간 동기화됨`);
+      },
+      (error) => {
+        console.error('Firestore real-time subscription error:', error);
+        setIsSyncing(false);
+        setLastSyncText('로컬 캐시 모드');
+      }
+    );
+
+    // Real-time listener for Store Settings (onSnapshot)
+    const unsubscribeSettings = subscribeToStoreSettings(
+      (liveSettings) => {
+        setStoreSettings(liveSettings);
+        setStoreNameInput(liveSettings.storeName);
+        saveStoreSettings(liveSettings);
+      },
+      (error) => {
+        console.error('Settings subscription error:', error);
+      }
+    );
 
     return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleFocus);
+      unsubscribeWaste();
+      unsubscribeSettings();
     };
-  }, [triggerSync]);
+  }, []);
 
-  // Add new waste item
+  // 2. Add new waste item -> Saved to Cloud DB (Firestore)
   const handleSaveWasteItem = async (itemData: Omit<WasteItem, 'id' | 'registeredAt'>) => {
-    const newItem: WasteItem = {
-      ...itemData,
-      id: `waste-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      registeredAt: new Date().toISOString(),
-    };
-
-    // Optimistic local update
-    const updated = [newItem, ...wasteItems];
-    setWasteItems(updated);
-    saveWasteItems(updated);
-
-    // Server push for cross-device sync
+    setIsSyncing(true);
     try {
-      setIsSyncing(true);
-      await addWasteItemServer(newItem);
-      const now = new Date();
-      setLastSyncText(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} 동기화 완료`);
-    } catch (err) {
-      console.error('Failed to sync new item to server:', err);
+      // Direct write to Cloud Firestore
+      // All other devices (PC, Mobile) will receive this item immediately via onSnapshot!
+      await addWasteItemToFirestore(itemData);
+
+      // Subtle celebration feedback
+      try {
+        confetti({
+          particleCount: 25,
+          spread: 40,
+          origin: { y: 0.8 },
+        });
+      } catch (e) {}
+    } catch (error) {
+      console.error('Failed to register waste item to Firestore:', error);
+      // Fallback local update
+      const fallbackItem: WasteItem = {
+        ...itemData,
+        id: `waste-${Date.now()}`,
+        registeredAt: new Date().toISOString(),
+      };
+      setWasteItems((prev) => [fallbackItem, ...prev]);
     } finally {
       setIsSyncing(false);
     }
-
-    // Subtle celebration feedback
-    try {
-      confetti({
-        particleCount: 25,
-        spread: 40,
-        origin: { y: 0.8 },
-      });
-    } catch (e) {
-      // safe fallback
-    }
   };
 
-  // Delete item
+  // 3. Delete item -> Deleted from Cloud DB (Firestore)
   const handleDeleteItem = async (id: string) => {
-    const updated = wasteItems.filter((i) => i.id !== id);
-    setWasteItems(updated);
-    saveWasteItems(updated);
-
+    setIsSyncing(true);
     try {
-      setIsSyncing(true);
-      await deleteWasteItemServer(id);
-    } catch (err) {
-      console.error('Failed to delete on server:', err);
+      await deleteWasteItemFromFirestore(id);
+    } catch (error) {
+      console.error('Failed to delete waste item from Firestore:', error);
+      setWasteItems((prev) => prev.filter((i) => i.id !== id));
     } finally {
       setIsSyncing(false);
     }
   };
 
-  // Update item quantity
+  // 4. Update item quantity -> Updated in Cloud DB (Firestore)
   const handleUpdateQuantity = async (id: string, newQty: number) => {
-    const updated = wasteItems.map((i) => (i.id === id ? { ...i, quantity: newQty } : i));
-    setWasteItems(updated);
-    saveWasteItems(updated);
-
     try {
-      await updateWasteItemServer(id, { quantity: newQty });
-    } catch (err) {
-      console.error('Failed to update quantity on server:', err);
+      await updateWasteItemInFirestore(id, { quantity: newQty });
+    } catch (error) {
+      console.error('Failed to update quantity in Firestore:', error);
+      setWasteItems((prev) => prev.map((i) => (i.id === id ? { ...i, quantity: newQty } : i)));
     }
   };
 
@@ -220,30 +189,29 @@ export default function App() {
 
   // Reset sample data
   const handleResetSampleData = async () => {
-    if (confirm('샘플 폐기 데이터를 복원하시겠습니까? (PC와 모바일 모두 초기화됩니다)')) {
+    if (confirm('샘플 폐기 데이터를 클라우드 DB에 다시 생성하시겠습니까? (모든 기기에 실시간 반영됩니다)')) {
       try {
         setIsSyncing(true);
-        const resetItems = await resetWasteItemsServer();
-        if (resetItems) {
-          setWasteItems(resetItems);
-        } else {
-          const sample = generateSeedData();
-          setWasteItems(sample);
-          saveWasteItems(sample);
-        }
+        const sample = generateSeedData();
+        // Delete existing items and seed fresh ones
+        await Promise.all(wasteItems.map((item) => deleteWasteItemFromFirestore(item.id).catch(() => {})));
+        await ensureInitialDataInFirestore(sample);
       } finally {
         setIsSyncing(false);
       }
     }
   };
 
-  // Save store name
+  // Save store name to Firestore
   const handleSaveStoreName = async () => {
-    const newSettings = { ...storeSettings, storeName: storeNameInput.trim() || '우리편의점' };
+    const newSettings: StoreSettings = { ...storeSettings, storeName: storeNameInput.trim() || 'CU봉암공단점' };
     setStoreSettings(newSettings);
-    saveStoreSettings(newSettings);
     setIsEditingStore(false);
-    await saveStoreSettingsServer(newSettings);
+    try {
+      await saveStoreSettingsToFirestore(newSettings);
+    } catch (error) {
+      console.error('Failed to save store settings to Firestore:', error);
+    }
   };
 
   // Filter items based purely on product name or barcode search
@@ -321,21 +289,16 @@ export default function App() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
-              <span className="font-semibold text-[11px] flex items-center gap-1">
+              <span className="font-semibold text-[11px] flex items-center gap-1.5">
+                <Cloud className="w-3.5 h-3.5 text-emerald-600" />
                 <Smartphone className="w-3.5 h-3.5 text-emerald-700" />
                 <span className="text-emerald-500 font-bold">↔</span>
                 <Laptop className="w-3.5 h-3.5 text-emerald-700" />
-                <span>모바일/PC 실시간 동기화</span>
+                <span>Firestore 실시간 동기화</span>
               </span>
-              <button
-                type="button"
-                onClick={() => triggerSync(false)}
-                disabled={isSyncing}
-                title="지금 즉시 서버와 데이터 동기화"
-                className="ml-1 p-1 text-emerald-700 hover:text-emerald-950 hover:bg-emerald-100 rounded transition-colors cursor-pointer"
-              >
-                <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-emerald-800' : ''}`} />
-              </button>
+              {isSyncing && (
+                <RefreshCw className="w-3 h-3 animate-spin text-emerald-800 ml-1" />
+              )}
             </div>
 
             <button

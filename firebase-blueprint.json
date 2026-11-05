@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "WasteItem": {
+      "title": "WasteItem",
+      "description": "편의점 폐기 상품 등록 항목",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "고유 식별자"
+        },
+        "barcode": {
+          "type": "string",
+          "description": "상품 바코드 번호 (880...)"
+        },
+        "productName": {
+          "type": "string",
+          "description": "폐기 상품명"
+        },
+        "category": {
+          "type": "string",
+          "description": "상품 분류 카테고리"
+        },
+        "quantity": {
+          "type": "number",
+          "description": "폐기 등록 수량"
+        },
+        "unitPrice": {
+          "type": "number",
+          "description": "소비자가 판매단가"
+        },
+        "costPrice": {
+          "type": "number",
+          "description": "점포 원가단가"
+        },
+        "date": {
+          "type": "string",
+          "description": "폐기 발생 일자 (YYYY-MM-DD)"
+        },
+        "disposalTime": {
+          "type": "string",
+          "description": "폐기 등록 시간 (HH:mm)"
+        },
+        "reason": {
+          "type": "string",
+          "description": "폐기 사유 (유통기한 경과 등)"
+        },
+        "storeBrand": {
+          "type": "string",
+          "description": "점포 브랜드 (CU, GS25 등)"
+        },
+        "registeredAt": {
+          "type": "string",
+          "description": "등록 일시 ISO 문자열"
+        },
+        "notes": {
+          "type": "string",
+          "description": "특이사항 메모"
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "제품 실물 사진 Base64 또는 이미지 URL"
+        }
+      },
+      "required": ["productName", "quantity", "date"]
+    },
+    "StoreSettings": {
+      "title": "StoreSettings",
+      "description": "편의점 점포 설정",
+      "type": "object",
+      "properties": {
+        "storeName": {
+          "type": "string",
+          "description": "점포명 (예: CU봉암공단점)"
+        },
+        "brand": {
+          "type": "string",
+          "description": "편의점 브랜드"
+        },
+        "costRatio": {
+          "type": "number",
+          "description": "원가율"
+        }
+      },
+      "required": ["storeName"]
+    }
+  },
+  "firestore": {
+    "/waste_items/{itemId}": {
+      "schema": "WasteItem",
+      "description": "편의점 폐기 등록 품목 목록 컬렉션"
+    },
+    "/store_settings/{settingId}": {
+      "schema": "StoreSettings",
+      "description": "점포 설정 및 기본 정보"
+    }
+  }
+}
