@@ -208,20 +208,20 @@ export async function lookupBarcodeFromPublicAPI(
       manufacturer: '서울우유협동조합',
     };
   }
-  if (clean.startsWith('88010561') || clean.startsWith('880105601')) {
+  if (clean.startsWith('8801056')) {
+    return {
+      productName: '롯데칠성 음료/밀키스/사이다',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '롯데칠성음료',
+    };
+  }
+  if (clean.startsWith('8801068') || clean.startsWith('8801099')) {
     return {
       productName: 'SPC삼립 베이커리/디저트',
       category: '디저트/베이커리',
       sourceName: '공공 유통 표준 바코드(880) DB',
       manufacturer: 'SPC삼립',
-    };
-  }
-  if (clean.startsWith('880105600') || clean.startsWith('880105602') || clean.startsWith('880105603') || clean.startsWith('88010626')) {
-    return {
-      productName: '롯데칠성 음료/주스',
-      category: '유제품/음료',
-      sourceName: '공공 유통 표준 바코드(880) DB',
-      manufacturer: '롯데칠성음료',
     };
   }
   if (clean.startsWith('8801117')) {

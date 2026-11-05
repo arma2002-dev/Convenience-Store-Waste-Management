@@ -381,6 +381,30 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
     defaultTimeSlot: '22:00',
   },
   {
+    barcode: '8801056154011',
+    productName: '롯데 밀키스 250ml 캔',
+    category: '유제품/음료',
+    unitPrice: 1300,
+    costPrice: 910,
+    defaultTimeSlot: '22:00',
+  },
+  {
+    barcode: '8801056154028',
+    productName: '롯데 밀키스 제로 250ml 캔',
+    category: '유제품/음료',
+    unitPrice: 1400,
+    costPrice: 980,
+    defaultTimeSlot: '22:00',
+  },
+  {
+    barcode: '8801056154042',
+    productName: '롯데 밀키스 500ml 페트',
+    category: '유제품/음료',
+    unitPrice: 2200,
+    costPrice: 1540,
+    defaultTimeSlot: '22:00',
+  },
+  {
     barcode: '8801037086804',
     productName: '동아오츠카 포카리스웨트 500ml',
     category: '유제품/음료',
@@ -522,7 +546,7 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
 
   // 디저트 / 베이커리
   {
-    barcode: '8801056010111',
+    barcode: '8801068088111',
     productName: '삼립 포켓몬 돌아온 로켓단 초코롤',
     category: '디저트/베이커리',
     unitPrice: 1500,
@@ -530,7 +554,7 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
     defaultTimeSlot: '14:00',
   },
   {
-    barcode: '8801056010128',
+    barcode: '8801068088128',
     productName: '삼립 포켓몬 돌아온 고오스 초코케익',
     category: '디저트/베이커리',
     unitPrice: 1500,
@@ -538,7 +562,7 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
     defaultTimeSlot: '14:00',
   },
   {
-    barcode: '8801056010135',
+    barcode: '8801068088135',
     productName: '삼립 포켓몬 피카피카 촉촉치즈케익',
     category: '디저트/베이커리',
     unitPrice: 1500,
@@ -546,7 +570,7 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
     defaultTimeSlot: '14:00',
   },
   {
-    barcode: '8801056010222',
+    barcode: '8801068010222',
     productName: '연세우유 우유생크림빵',
     category: '디저트/베이커리',
     unitPrice: 2900,
@@ -555,7 +579,7 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
     storeBrand: 'CU',
   },
   {
-    barcode: '8801056010239',
+    barcode: '8801068010239',
     productName: '연세우유 초코생크림빵',
     category: '디저트/베이커리',
     unitPrice: 3000,
@@ -564,7 +588,7 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
     storeBrand: 'CU',
   },
   {
-    barcode: '8801056010246',
+    barcode: '8801068010246',
     productName: '연세우유 말차생크림빵',
     category: '디저트/베이커리',
     unitPrice: 3400,
@@ -573,7 +597,7 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
     storeBrand: 'CU',
   },
   {
-    barcode: '8801056010253',
+    barcode: '8801068010253',
     productName: '연세우유 단팥생크림빵',
     category: '디저트/베이커리',
     unitPrice: 3000,
@@ -582,7 +606,7 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
     storeBrand: 'CU',
   },
   {
-    barcode: '8801056010333',
+    barcode: '8801068010333',
     productName: '브레디크 순우유 식빵',
     category: '디저트/베이커리',
     unitPrice: 2800,
@@ -591,7 +615,7 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
     storeBrand: 'GS25',
   },
   {
-    barcode: '8801056010444',
+    barcode: '8801117010444',
     productName: '촉촉한 초코칩 쿠키 팩',
     category: '디저트/베이커리',
     unitPrice: 2400,
@@ -599,7 +623,7 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
     defaultTimeSlot: '14:00',
   },
   {
-    barcode: '8801056154013',
+    barcode: '8801068088012',
     productName: '삼립 정통 크림빵 80g',
     category: '디저트/베이커리',
     unitPrice: 1400,
@@ -607,7 +631,7 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
     defaultTimeSlot: '14:00',
   },
   {
-    barcode: '8801056154020',
+    barcode: '8801068088029',
     productName: '삼립 미니 꿀호떡 팩',
     category: '디저트/베이커리',
     unitPrice: 2000,
@@ -615,7 +639,7 @@ export const PRESET_PRODUCTS: PresetProduct[] = [
     defaultTimeSlot: '14:00',
   },
   {
-    barcode: '8801056154037',
+    barcode: '8801068088036',
     productName: '삼립 보름달빵 75g',
     category: '디저트/베이커리',
     unitPrice: 1400,

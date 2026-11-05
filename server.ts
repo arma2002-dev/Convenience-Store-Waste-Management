@@ -178,6 +178,9 @@ const KOREA_POPULAR_BARCODES: Record<string, { productName: string; category: st
   '8801056002123': { productName: '롯데 칠성사이다 제로 355ml', category: '유제품/음료', manufacturer: '롯데칠성음료' },
   '8801062634032': { productName: '롯데 펩시콜라 제로슈거 라임 355ml', category: '유제품/음료', manufacturer: '롯데칠성음료' },
   '8801056038108': { productName: '롯데 밀키스 250ml 캔', category: '유제품/음료', manufacturer: '롯데칠성음료' },
+  '8801056154011': { productName: '롯데 밀키스 250ml 캔', category: '유제품/음료', manufacturer: '롯데칠성음료' },
+  '8801056154028': { productName: '롯데 밀키스 제로 250ml 캔', category: '유제품/음료', manufacturer: '롯데칠성음료' },
+  '8801056154042': { productName: '롯데 밀키스 500ml 페트', category: '유제품/음료', manufacturer: '롯데칠성음료' },
   '8801037086804': { productName: '동아오츠카 포카리스웨트 500ml', category: '유제품/음료', manufacturer: '동아오츠카' },
   '8801037086811': { productName: '동아오츠카 오로나민C 120ml', category: '유제품/음료', manufacturer: '동아오츠카' },
   '8806002010118': { productName: '동아제약 박카스F 120ml', category: '유제품/음료', manufacturer: '동아제약' },
@@ -198,18 +201,18 @@ const KOREA_POPULAR_BARCODES: Record<string, { productName: string; category: st
   '8801094017309': { productName: '몬스터 에너지 355ml 캔', category: '유제품/음료', manufacturer: '코카콜라음료' },
   '8801056028109': { productName: '롯데 핫식스 오리지널 250ml 캔', category: '유제품/음료', manufacturer: '롯데칠성음료' },
   // 디저트/베이커리
-  '8801056010111': { productName: '삼립 포켓몬 돌아온 로켓단 초코롤', category: '디저트/베이커리', manufacturer: 'SPC삼립' },
-  '8801056010128': { productName: '삼립 포켓몬 돌아온 고오스 초코케익', category: '디저트/베이커리', manufacturer: 'SPC삼립' },
-  '8801056010135': { productName: '삼립 포켓몬 피카피카 치즈케익', category: '디저트/베이커리', manufacturer: 'SPC삼립' },
-  '8801056010222': { productName: '연세우유 우유생크림빵', category: '디저트/베이커리', manufacturer: '연세우유/CU' },
-  '8801056010239': { productName: '연세우유 초코생크림빵', category: '디저트/베이커리', manufacturer: '연세우유/CU' },
-  '8801056010246': { productName: '연세우유 말차생크림빵', category: '디저트/베이커리', manufacturer: '연세우유/CU' },
-  '8801056010253': { productName: '연세우유 단팥생크림빵', category: '디저트/베이커리', manufacturer: '연세우유/CU' },
-  '8801056010333': { productName: '브레디크 순우유 식빵', category: '디저트/베이커리', manufacturer: 'GS25' },
-  '8801056010444': { productName: '촉촉한 초코칩 쿠키 팩', category: '디저트/베이커리', manufacturer: '오리온' },
-  '8801056154013': { productName: '삼립 정통 크림빵 80g', category: '디저트/베이커리', manufacturer: 'SPC삼립' },
-  '8801056154020': { productName: '삼립 미니 꿀호떡 팩', category: '디저트/베이커리', manufacturer: 'SPC삼립' },
-  '8801056154037': { productName: '삼립 보름달빵 75g', category: '디저트/베이커리', manufacturer: 'SPC삼립' },
+  '8801068088111': { productName: '삼립 포켓몬 돌아온 로켓단 초코롤', category: '디저트/베이커리', manufacturer: 'SPC삼립' },
+  '8801068088128': { productName: '삼립 포켓몬 돌아온 고오스 초코케익', category: '디저트/베이커리', manufacturer: 'SPC삼립' },
+  '8801068088135': { productName: '삼립 포켓몬 피카피카 치즈케익', category: '디저트/베이커리', manufacturer: 'SPC삼립' },
+  '8801068010222': { productName: '연세우유 우유생크림빵', category: '디저트/베이커리', manufacturer: '연세우유/CU' },
+  '8801068010239': { productName: '연세우유 초코생크림빵', category: '디저트/베이커리', manufacturer: '연세우유/CU' },
+  '8801068010246': { productName: '연세우유 말차생크림빵', category: '디저트/베이커리', manufacturer: '연세우유/CU' },
+  '8801068010253': { productName: '연세우유 단팥생크림빵', category: '디저트/베이커리', manufacturer: '연세우유/CU' },
+  '8801068010333': { productName: '브레디크 순우유 식빵', category: '디저트/베이커리', manufacturer: 'GS25' },
+  '8801117010444': { productName: '촉촉한 초코칩 쿠키 팩', category: '디저트/베이커리', manufacturer: '오리온' },
+  '8801068088012': { productName: '삼립 정통 크림빵 80g', category: '디저트/베이커리', manufacturer: 'SPC삼립' },
+  '8801068088029': { productName: '삼립 미니 꿀호떡 팩', category: '디저트/베이커리', manufacturer: 'SPC삼립' },
+  '8801068088036': { productName: '삼립 보름달빵 75g', category: '디저트/베이커리', manufacturer: 'SPC삼립' },
   '8801117178005': { productName: '오리온 포카칩 오리지널 66g', category: '디저트/베이커리', manufacturer: '오리온' },
   '8801117178012': { productName: '오리온 포카칩 어니언맛 66g', category: '디저트/베이커리', manufacturer: '오리온' },
   '8801117111125': { productName: '오리온 초코파이 정 2입', category: '디저트/베이커리', manufacturer: '오리온' },
@@ -404,11 +407,11 @@ function guessKoreanProductFromBarcode(barcode: string): { productName: string; 
   if (clean.startsWith('8801115')) {
     return { productName: '서울우유 유제품', category: '유제품/음료', manufacturer: '서울우유협동조합' };
   }
-  if (clean.startsWith('88010561') || clean.startsWith('880105601')) {
-    return { productName: 'SPC삼립 베이커리/디저트', category: '디저트/베이커리', manufacturer: 'SPC삼립' };
+  if (clean.startsWith('8801056')) {
+    return { productName: '롯데칠성 밀키스/음료/주스', category: '유제품/음료', manufacturer: '롯데칠성음료' };
   }
-  if (clean.startsWith('880105600') || clean.startsWith('880105602') || clean.startsWith('880105603') || clean.startsWith('88010626')) {
-    return { productName: '롯데칠성 음료/주스', category: '유제품/음료', manufacturer: '롯데칠성음료' };
+  if (clean.startsWith('8801068') || clean.startsWith('8801099')) {
+    return { productName: 'SPC삼립 베이커리/디저트', category: '디저트/베이커리', manufacturer: 'SPC삼립' };
   }
   if (clean.startsWith('8801117')) {
     return { productName: '오리온 제과/스낵', category: '디저트/베이커리', manufacturer: '오리온' };
