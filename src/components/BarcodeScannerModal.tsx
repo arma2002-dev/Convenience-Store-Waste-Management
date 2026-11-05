@@ -67,10 +67,14 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const scanIntervalRef = useRef<any>(null);
   const hasDetectedRef = useRef<boolean>(false);
 
-  // Sync date when modal opens with initialDate
+  // Reset form states when modal opens
   useEffect(() => {
     if (isOpen) {
       if (initialDate) setDisposalDate(initialDate);
+      setBarcode('');
+      setProductName('');
+      setQuantity(1);
+      setNotes('');
       setScanSuccessMessage(null);
       setCameraError(null);
       setProductPhoto(null);
@@ -171,13 +175,16 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         );
         playSuccessChime();
       } else {
-        // Do NOT overwrite user entered name if already typed
+        setProductName('');
+        setProductPhoto(null);
         setScanSuccessMessage(`바코드 [${clean}] 인식 완료! 등록되지 않은 상품이므로 상품명을 직접 입력해 주세요.`);
         setTimeout(() => productNameInputRef.current?.focus(), 150);
       }
     } catch (e) {
       console.warn('Barcode lookup failed:', e);
-      setScanSuccessMessage(`바코드 [${clean}] 인식 완료! 상품명을 직접 입력해 주세요.`);
+      setProductName('');
+      setProductPhoto(null);
+      setScanSuccessMessage(`바코드 [${clean}] 인식 완료! 등록되지 않은 상품이므로 상품명을 직접 입력해 주세요.`);
       setTimeout(() => productNameInputRef.current?.focus(), 150);
     } finally {
       setIsLookingUpBarcode(false);
@@ -391,13 +398,16 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         );
         playSuccessChime();
       } else {
-        // Do not overwrite user entered name if already typed
-        setScanSuccessMessage(`바코드 [${clean}] 스캔 성공! 등록되지 않은 바코드이므로 상품명을 직접 입력해 주세요.`);
+        setProductName('');
+        setProductPhoto(null);
+        setScanSuccessMessage(`바코드 [${clean}] 스캔 성공! 등록되지 않은 상품이므로 상품명을 직접 입력해 주세요.`);
         setTimeout(() => productNameInputRef.current?.focus(), 150);
       }
     } catch (e) {
       console.warn('Barcode lookup failed:', e);
-      setScanSuccessMessage(`바코드 [${clean}] 스캔 완료! 상품명을 직접 입력해 주세요.`);
+      setProductName('');
+      setProductPhoto(null);
+      setScanSuccessMessage(`바코드 [${clean}] 스캔 완료! 등록되지 않은 상품이므로 상품명을 직접 입력해 주세요.`);
       setTimeout(() => productNameInputRef.current?.focus(), 150);
     } finally {
       setIsLookingUpBarcode(false);
@@ -461,6 +471,12 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         if (aiResult.barcode) {
           setBarcode(aiResult.barcode);
           await fetchBarcodePublicInfo(aiResult.barcode);
+          if (aiResult.productName && !aiResult.productName.includes('한국 유통상품')) {
+            setProductName((curr) => curr || aiResult.productName);
+            if (aiResult.category) {
+              setCategory(aiResult.category);
+            }
+          }
         } else {
           if (aiResult.productName && !aiResult.productName.includes('한국 유통상품')) {
             setProductName(aiResult.productName);
