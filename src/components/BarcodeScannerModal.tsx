@@ -139,7 +139,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   // Query product data from Public Data Portal / Food Safety Open API / Preset Database
   const fetchBarcodePublicInfo = async (code: string) => {
-    const clean = code.replace(/[\s-]/g, '');
+    const clean = code.replace(/[^0-9]/g, '');
     if (!clean || clean.length < 5) return;
 
     // 1. Instant local preset catalog match (zero latency)
@@ -171,15 +171,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         );
         playSuccessChime();
       } else {
-        // Do NOT pre-fill robotic "한국 유통상품"! Keep clean so user can enter easily
-        setProductName('');
-        setScanSuccessMessage(`바코드 [${clean}] 인식 완료! 상품명을 입력해 주세요.`);
+        // Do NOT overwrite user entered name if already typed
+        setScanSuccessMessage(`바코드 [${clean}] 인식 완료! 등록되지 않은 상품이므로 상품명을 직접 입력해 주세요.`);
         setTimeout(() => productNameInputRef.current?.focus(), 150);
       }
     } catch (e) {
       console.warn('Barcode lookup failed:', e);
-      setProductName('');
-      setScanSuccessMessage(`바코드 [${clean}] 인식 완료! 상품명을 입력해 주세요.`);
+      setScanSuccessMessage(`바코드 [${clean}] 인식 완료! 상품명을 직접 입력해 주세요.`);
       setTimeout(() => productNameInputRef.current?.focus(), 150);
     } finally {
       setIsLookingUpBarcode(false);
@@ -191,27 +189,29 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   const handleBarcodeChange = (val: string) => {
     setBarcode(val);
-    const clean = val.replace(/[\s-]/g, '');
+    const clean = val.replace(/[^0-9]/g, '');
 
-    // 1. Instant check in preset database
+    // 1. Instant check in preset database (zero latency <1ms)
     const matched = findPresetProductByBarcode(clean);
     if (matched) {
       setProductName(matched.productName);
       if (matched.category) setCategory(matched.category);
-      setScanSuccessMessage(`유통 바코드 자동 매칭: "${matched.productName}"`);
+      setScanSuccessMessage(`[유통 카탈로그] "${matched.productName}" 자동 매칭 완료!`);
       playSuccessChime();
       return;
     }
 
-    // 2. Debounce public API lookup only when full standard barcode is reached (13, 12, or 8 digits)
+    // 2. Debounce public API lookup
     if (barcodeDebounceRef.current) {
       clearTimeout(barcodeDebounceRef.current);
     }
 
-    if (clean.length === 13 || clean.length === 12 || clean.length === 8) {
+    if (clean.length >= 7) {
+      // Standard barcode lengths (12, 13, 14, 8) query faster
+      const delay = clean.length === 8 || clean.length >= 12 ? 180 : 500;
       barcodeDebounceRef.current = setTimeout(() => {
         fetchBarcodePublicInfo(clean);
-      }, 350);
+      }, delay);
     }
   };
 
@@ -356,7 +356,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   // Process a detected barcode string
   const handleDetectedBarcode = async (code: string, successMsg: string) => {
-    const clean = code.replace(/[\s-]/g, '');
+    const clean = code.replace(/[^0-9]/g, '');
     setBarcode(clean);
     playSuccessChime();
 
@@ -366,7 +366,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       } catch (e) {}
     }
 
-    // 1. Instant check in preset catalog for zero-latency response
+    // 1. Instant check in preset catalog for zero-latency response (<1ms)
     const localMatch = findPresetProductByBarcode(clean);
     if (localMatch) {
       setProductName(localMatch.productName);
@@ -391,15 +391,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         );
         playSuccessChime();
       } else {
-        // Unlisted product: NEVER fill in "한국 유통상품"! Leave empty and prompt user
-        setProductName('');
-        setScanSuccessMessage(`바코드 [${clean}] 스캔 성공! 상품명을 입력해 주세요.`);
+        // Do not overwrite user entered name if already typed
+        setScanSuccessMessage(`바코드 [${clean}] 스캔 성공! 등록되지 않은 바코드이므로 상품명을 직접 입력해 주세요.`);
         setTimeout(() => productNameInputRef.current?.focus(), 150);
       }
     } catch (e) {
       console.warn('Barcode lookup failed:', e);
-      setProductName('');
-      setScanSuccessMessage(`바코드 [${clean}] 스캔 완료! 상품명을 입력해 주세요.`);
+      setScanSuccessMessage(`바코드 [${clean}] 스캔 완료! 상품명을 직접 입력해 주세요.`);
       setTimeout(() => productNameInputRef.current?.focus(), 150);
     } finally {
       setIsLookingUpBarcode(false);
@@ -816,10 +814,22 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
+                          if (barcodeDebounceRef.current) clearTimeout(barcodeDebounceRef.current);
                           fetchBarcodePublicInfo(barcode);
                         }
                       }}
-                      placeholder="바코드 13자리 입력"
+                      onPaste={(e) => {
+                        const pasted = e.clipboardData.getData('text');
+                        if (pasted) {
+                          const clean = pasted.replace(/[^0-9]/g, '');
+                          if (clean.length >= 6) {
+                            setTimeout(() => {
+                              fetchBarcodePublicInfo(clean);
+                            }, 50);
+                          }
+                        }
+                      }}
+                      placeholder="바코드 번호 입력 또는 스캔 (예: 8801043056953)"
                       className="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-slate-900 placeholder:text-slate-400"
                     />
                     {barcode && (

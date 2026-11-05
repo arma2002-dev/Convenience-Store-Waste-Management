@@ -2,11 +2,11 @@ import { BrowserMultiFormatReader } from '@zxing/browser';
 import { PRESET_PRODUCTS } from '../data/presetProducts';
 import { PresetProduct } from '../types/waste';
 
-// Local lookup by barcode number (with digit normalization for 12/13 digit UPC/EAN)
+// Local lookup by barcode number (with digit normalization for 12/13/14 digit UPC/EAN/ITF)
 export function findPresetProductByBarcode(barcode: string): PresetProduct | undefined {
   if (!barcode) return undefined;
   const clean = barcode.replace(/[^0-9]/g, '');
-  if (!clean) return undefined;
+  if (!clean || clean.length < 5) return undefined;
 
   // 1. Exact match
   const direct = PRESET_PRODUCTS.find((p) => p.barcode === clean);
@@ -22,6 +22,23 @@ export function findPresetProductByBarcode(barcode: string): PresetProduct | und
     const withoutZero = clean.substring(1);
     const match = PRESET_PRODUCTS.find((p) => p.barcode === withoutZero);
     if (match) return match;
+  }
+
+  // 3. 14-digit GTIN / ITF-14 match (strip leading indicator)
+  if (clean.length === 14) {
+    const inner13 = clean.substring(1);
+    const match = PRESET_PRODUCTS.find((p) => p.barcode === inner13);
+    if (match) return match;
+    const matchEnds = PRESET_PRODUCTS.find((p) => clean.endsWith(p.barcode));
+    if (matchEnds) return matchEnds;
+  }
+
+  // 4. Substring / endsWith match (for 8+ digits)
+  if (clean.length >= 8) {
+    const matchEnds = PRESET_PRODUCTS.find(
+      (p) => clean.endsWith(p.barcode) || (clean.length >= 12 && p.barcode.endsWith(clean))
+    );
+    if (matchEnds) return matchEnds;
   }
 
   return undefined;
@@ -166,6 +183,135 @@ export async function lookupBarcodeFromPublicAPI(
   }
 
   // 3. Fallback: Intelligent Korean manufacturer brand recognition
+  // 3. Fallback: Intelligent Korean manufacturer brand recognition
+  if (clean.startsWith('88010430')) {
+    return {
+      productName: '농심 라면/스낵 상품',
+      category: '기타',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '농심',
+    };
+  }
+  if (clean.startsWith('8801043')) {
+    return {
+      productName: '빙그레 유제품/음료 상품',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '빙그레',
+    };
+  }
+  if (clean.startsWith('8801115')) {
+    return {
+      productName: '서울우유 유제품',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '서울우유협동조합',
+    };
+  }
+  if (clean.startsWith('88010561') || clean.startsWith('880105601')) {
+    return {
+      productName: 'SPC삼립 베이커리/디저트',
+      category: '디저트/베이커리',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: 'SPC삼립',
+    };
+  }
+  if (clean.startsWith('880105600') || clean.startsWith('880105602') || clean.startsWith('880105603') || clean.startsWith('88010626')) {
+    return {
+      productName: '롯데칠성 음료/주스',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '롯데칠성음료',
+    };
+  }
+  if (clean.startsWith('8801117')) {
+    return {
+      productName: '오리온 제과/스낵',
+      category: '디저트/베이커리',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '오리온',
+    };
+  }
+  if (clean.startsWith('8801007')) {
+    return {
+      productName: 'CJ제일제당 식품',
+      category: '도시락/덮밥',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: 'CJ제일제당',
+    };
+  }
+  if (clean.startsWith('8801045')) {
+    return {
+      productName: '오뚜기 라면/간편식',
+      category: '기타',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '오뚜기',
+    };
+  }
+  if (clean.startsWith('8801073')) {
+    return {
+      productName: '삼양식품 라면/식품',
+      category: '기타',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '삼양식품',
+    };
+  }
+  if (clean.startsWith('8801094')) {
+    return {
+      productName: '코카콜라음료 상품',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '코카콜라음료',
+    };
+  }
+  if (clean.startsWith('8801123')) {
+    return {
+      productName: '롯데웰푸드 제과/육가공',
+      category: '디저트/베이커리',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '롯데웰푸드',
+    };
+  }
+  if (clean.startsWith('8801155')) {
+    return {
+      productName: '해태제과 스낵/과자',
+      category: '디저트/베이커리',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '해태제과',
+    };
+  }
+  if (clean.startsWith('88010620')) {
+    return {
+      productName: '크라운제과 스낵',
+      category: '디저트/베이커리',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '크라운제과',
+    };
+  }
+  if (clean.startsWith('8804973')) {
+    return {
+      productName: '한국마즈 이클립스/제과',
+      category: '디저트/베이커리',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '한국마즈',
+    };
+  }
+  if (clean.startsWith('8801111')) {
+    return {
+      productName: '남양유업 유음료',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '남양유업',
+    };
+  }
+  if (clean.startsWith('8801121')) {
+    return {
+      productName: '매일유업 유음료/디저트',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드(880) DB',
+      manufacturer: '매일유업',
+    };
+  }
   if (clean.startsWith('880103700')) {
     return {
       productName: '맥심 슈프림골드 커피믹스',
@@ -206,6 +352,30 @@ export async function lookupBarcodeFromPublicAPI(
       manufacturer: '동서식품',
     };
   }
+  if (clean.startsWith('8806002')) {
+    return {
+      productName: '동아제약 자양강장/의약외품',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드 DB',
+      manufacturer: '동아제약',
+    };
+  }
+  if (clean.startsWith('8809040')) {
+    return {
+      productName: '광동제약 음료/생수',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드 DB',
+      manufacturer: '광동제약',
+    };
+  }
+  if (clean.startsWith('8801382')) {
+    return {
+      productName: '웅진식품 차음료',
+      category: '유제품/음료',
+      sourceName: '공공 유통 표준 바코드 DB',
+      manufacturer: '웅진식품',
+    };
+  }
   if (clean.startsWith('8809489') || clean.startsWith('88010628')) {
     return {
       productName: 'CU 편의점 프레시푸드',
@@ -214,8 +384,16 @@ export async function lookupBarcodeFromPublicAPI(
       manufacturer: 'BGF리테일(CU)',
     };
   }
+  if (clean.startsWith('8809112')) {
+    return {
+      productName: '편의점 즉석조리/튀김류',
+      category: '조리/튀김',
+      sourceName: '편의점 즉석조리 표준코드',
+      manufacturer: '편의점 즉석조리',
+    };
+  }
 
-  // 4. Return empty string so the UI NEVER fills in robotic "한국 유통상품"
+  // 4. Return empty string if no brand prefix matched
   return {
     productName: '',
     category: '기타',

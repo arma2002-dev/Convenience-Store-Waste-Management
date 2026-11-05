@@ -752,29 +752,25 @@ app.all('/api/lookup-barcode', async (req, res) => {
 
   const clean = barcode.replace(/[^0-9]/g, '');
 
-  // 1. Instant check in server-side Korea convenience store catalog
-  if (KOREA_POPULAR_BARCODES[clean]) {
-    const item = KOREA_POPULAR_BARCODES[clean];
-    const photoUrl = await fetchHaccpImageByProductName(item.productName, customServiceKey);
-    return res.json({
-      success: true,
-      found: true,
-      source: 'convenience_catalog',
-      sourceName: '공공 유통표준 바코드 카탈로그',
-      data: {
-        barcode: clean,
-        productName: item.productName,
-        category: item.category,
-        manufacturer: item.manufacturer,
-        photoUrl: photoUrl || undefined,
-      },
-    });
+  // 1. Instant check in server-side Korea convenience store catalog (<5ms)
+  let matchedKey = clean;
+  if (!KOREA_POPULAR_BARCODES[matchedKey]) {
+    if (clean.length === 12 && KOREA_POPULAR_BARCODES['0' + clean]) {
+      matchedKey = '0' + clean;
+    } else if (clean.length === 13 && clean.startsWith('0') && KOREA_POPULAR_BARCODES[clean.slice(1)]) {
+      matchedKey = clean.slice(1);
+    } else if (clean.length === 14 && KOREA_POPULAR_BARCODES[clean.slice(1)]) {
+      matchedKey = clean.slice(1);
+    } else {
+      const found = Object.keys(KOREA_POPULAR_BARCODES).find(
+        (k) => (clean.length >= 8 && clean.endsWith(k)) || (k.length >= 12 && k.endsWith(clean))
+      );
+      if (found) matchedKey = found;
+    }
   }
 
-  // 1-1. Also check 12-digit UPC with leading zero or 13-digit without leading zero
-  if (clean.length === 12 && KOREA_POPULAR_BARCODES['0' + clean]) {
-    const item = KOREA_POPULAR_BARCODES['0' + clean];
-    const photoUrl = await fetchHaccpImageByProductName(item.productName, customServiceKey);
+  if (KOREA_POPULAR_BARCODES[matchedKey]) {
+    const item = KOREA_POPULAR_BARCODES[matchedKey];
     return res.json({
       success: true,
       found: true,
@@ -785,7 +781,6 @@ app.all('/api/lookup-barcode', async (req, res) => {
         productName: item.productName,
         category: item.category,
         manufacturer: item.manufacturer,
-        photoUrl: photoUrl || undefined,
       },
     });
   }
